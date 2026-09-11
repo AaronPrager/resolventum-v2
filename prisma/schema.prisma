@@ -1,0 +1,891 @@
+// Resolventum v2 schema. Design notes and the import mapping are in docs/schema-plan.md.
+//
+// Rules that every model follows:
+//   - every data row belongs to an Organization
+//   - money is integer cents; balances are derived, never stored
+//   - money rows are voided, not deleted
+//   - dates that are dates use @db.Date; instants use DateTime
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- identity
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  /// Null for portal users who sign in by magic link.
+  passwordHash    String?
+  name            String
+  emailVerifiedAt DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  memberships  Membership[]
+  authSessions AuthSession[]
+}
+
+/// Refresh-token sessions. Access tokens are short-lived JWTs; these are what get revoked.
+model AuthSession {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+enum MemberRole {
+  OWNER
+  TUTOR
+  ACCOUNTANT
+  /// Family portal, later.
+  GUARDIAN
+  /// Student portal, later.
+  STUDENT
+}
+
+/// A user's access to one organization. Optionally tied to the Tutor, Guardian, or Student it represents.
+model Membership {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           MemberRole
+  tutorId        String?      @unique
+  tutor          Tutor?       @relation(fields: [tutorId], references: [id], onDelete: SetNull)
+  guardianId     String?      @unique
+  guardian       Guardian?    @relation(fields: [guardianId], references: [id], onDelete: SetNull)
+  studentId      String?      @unique
+  student        Student?     @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Organization {
+  id                     String    @id @default(uuid())
+  name                   String
+  slug                   String    @unique
+  timezone               String    @default("America/New_York")
+  currency               String    @default("USD")
+  // Business profile (v1 kept these on User).
+  legalName              String?
+  address                String?
+  phone                  String?
+  /// Reply-to for mail sent to families. v1 User.academicEmail.
+  replyToEmail           String?
+  venmoHandle            String?
+  zelleHandle            String?
+  logoFileId             String?   @unique
+  logo                   File?     @relation("OrgLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  onboardingCompletedAt  DateTime?
+  studentIntakeEnabled   Boolean   @default(false)
+  // Product billing. Unused until Stripe lands.
+  plan                   String    @default("free")
+  stripeCustomerId       String?   @unique
+  stripeConnectAccountId String?   @unique
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  memberships       Membership[]
+  invitations       Invitation[]
+  tokens            Token[]
+  tutors            Tutor[]
+  accounts          Account[]
+  students          Student[]
+  lessonSeries      LessonSeries[]
+  lessons           Lesson[]
+  charges           Charge[]
+  payments          Payment[]
+  assignments       Assignment[]
+  files             File[]             @relation("OrgFiles")
+  messages          Message[]
+  expenseCategories ExpenseCategory[]
+  vendors           Vendor[]
+  paymentSources    PaymentSource[]
+  recurringExpenses RecurringExpense[]
+  expenses          Expense[]
+  taxYears          TaxYear[]
+  drafts            Draft[]
+}
+
+enum TokenKind {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+  INVITE
+  STUDENT_INTAKE
+  CALENDAR_FEED
+  HOMEWORK_UPLOAD
+}
+
+/// Every unguessable link in the system. Only the SHA-256 hash is stored.
+model Token {
+  id             String        @id @default(uuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind           TokenKind
+  tokenHash      String        @unique
+  /// What the token is for: a userId, invitationId, membershipId, or assignmentId.
+  subjectId      String
+  expiresAt      DateTime?
+  usedAt         DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([kind, subjectId])
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           MemberRole
+  invitedById    String?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, email])
+}
+
+model Waitlist {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------- people
+
+/// Staff who teach. Not a login unless a Membership points here.
+model Tutor {
+  id                 String       @id @default(uuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  email              String?
+  phone              String?
+  photoFileId        String?      @unique
+  photo              File?        @relation("TutorPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  color              String?
+  hourlyPayRateCents Int?
+  notes              String?
+  archivedAt         DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  membership Membership?
+  lessons    Lesson[]
+  expenses   Expense[]
+
+  @@index([organizationId, archivedAt])
+}
+
+/// Billing unit. A family, or a single independent student.
+model Account {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  notes          String?
+  archivedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  students  Student[]
+  guardians Guardian[]
+  charges   Charge[]
+  payments  Payment[]
+
+  @@index([organizationId, archivedAt])
+}
+
+/// Parent, guardian, or emergency contact for an account.
+model Guardian {
+  id           String   @id @default(uuid())
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  relationship String?
+  isPrimary    Boolean  @default(false)
+  isBilling    Boolean  @default(false)
+  isEmergency  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  membership Membership?
+
+  @@index([accountId])
+}
+
+model Student {
+  id                String       @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId         String
+  account           Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  dateOfBirth       DateTime?    @db.Date
+  photoFileId       String?      @unique
+  photo             File?        @relation("StudentPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  schoolName        String?
+  grade             String?
+  defaultSubject    String?
+  defaultPriceCents Int?
+  difficulties      String?
+  notes             String?
+  /// v1 StudentProgress.lastLessonStop
+  lastStopNote      String?
+  /// v1 StudentProgress.nextLessonStart
+  nextStartNote     String?
+  archivedAt        DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  membership    Membership?
+  lessons       LessonStudent[]
+  progressNotes ProgressNote[]
+  charges       Charge[]
+  assignments   Assignment[]
+  masteries     Mastery[]
+
+  @@index([organizationId, archivedAt])
+  @@index([accountId])
+  @@index([lastName, firstName])
+}
+
+// ---------------------------------------------------------------- teaching
+
+enum LessonStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum LocationType {
+  IN_PERSON
+  REMOTE
+}
+
+enum LessonCategory {
+  TUTORING
+  COLLEGE_COUNSELING
+}
+
+/// A recurring series. Occurrences are real Lesson rows generated ahead of time.
+model LessonSeries {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// RFC 5545 recurrence rule, e.g. "FREQ=WEEKLY;BYDAY=TU"
+  rrule          String
+  startsAt       DateTime
+  endsOn         DateTime?    @db.Date
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  lessons Lesson[]
+
+  @@index([organizationId])
+}
+
+/// One teaching event, solo or group. The roster is LessonStudent.
+model Lesson {
+  id             String          @id @default(uuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tutorId        String?
+  tutor          Tutor?          @relation(fields: [tutorId], references: [id], onDelete: SetNull)
+  seriesId       String?
+  series         LessonSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  startsAt       DateTime
+  durationMin    Int
+  allDay         Boolean         @default(false)
+  subject        String
+  category       LessonCategory?
+  locationType   LocationType    @default(IN_PERSON)
+  meetingLink    String?
+  /// Shown on the calendar.
+  notes          String?
+  status         LessonStatus    @default(SCHEDULED)
+  homeworkText   String?
+  homeworkDueOn  DateTime?       @db.Date
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  students      LessonStudent[]
+  files         LessonFile[]
+  assignments   Assignment[]
+  progressNotes ProgressNote[]
+
+  @@index([organizationId, startsAt])
+  @@index([tutorId, startsAt])
+  @@index([seriesId])
+}
+
+/// One student's seat in a lesson: their price, attendance, and per-student notes.
+model LessonStudent {
+  id            String       @id @default(uuid())
+  lessonId      String
+  lesson        Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  priceCents    Int
+  status        LessonStatus @default(SCHEDULED)
+  academicNotes String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  charge Charge?
+
+  @@unique([lessonId, studentId])
+  @@index([studentId])
+}
+
+/// "Where we stopped" notes over time. Survives lesson deletion. v1 LessonProgress.
+model ProgressNote {
+  id          String   @id @default(uuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId    String?
+  lesson      Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  notedOn     DateTime @db.Date
+  note        String
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([studentId, notedOn])
+  @@index([lessonId])
+}
+
+enum LessonFileKind {
+  NOTES
+  HOMEWORK
+}
+
+model LessonFile {
+  id        String         @id @default(uuid())
+  lessonId  String
+  lesson    Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  fileId    String
+  file      File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  kind      LessonFileKind
+  createdAt DateTime       @default(now())
+
+  @@unique([lessonId, fileId, kind])
+  @@index([fileId])
+}
+
+// ---------------------------------------------------------------- money in
+
+enum ChargeKind {
+  LESSON
+  FEE
+  /// May be negative: a credit given to the account.
+  ADJUSTMENT
+}
+
+/// Something an account owes (or is owed, when negative). Balance = sum(charges) - sum(payments).
+model Charge {
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         Account        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  studentId       String?
+  student         Student?       @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  lessonStudentId String?        @unique
+  lessonStudent   LessonStudent? @relation(fields: [lessonStudentId], references: [id], onDelete: SetNull)
+  kind            ChargeKind
+  amountCents     Int
+  chargedOn       DateTime       @db.Date
+  description     String
+  voidedAt        DateTime?
+  voidReason      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  allocations Allocation[]
+
+  @@index([accountId, chargedOn])
+  @@index([studentId, chargedOn])
+  @@index([organizationId, chargedOn])
+}
+
+enum PaymentKind {
+  PAYMENT
+  /// amountCents is negative
+  REFUND
+}
+
+enum PaymentMethod {
+  CASH
+  CHECK
+  CARD
+  ZELLE
+  VENMO
+  BANK_TRANSFER
+  /// Collected through Stripe, later.
+  ONLINE
+  OTHER
+}
+
+/// Money that actually moved.
+model Payment {
+  id             String        @id @default(uuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  kind           PaymentKind   @default(PAYMENT)
+  amountCents    Int
+  paidOn         DateTime      @db.Date
+  method         PaymentMethod
+  /// Check number, Zelle memo, and the like.
+  reference      String?
+  notes          String?
+  refundReason   String?
+  /// "stripe" when collected online.
+  provider       String?
+  providerRef    String?
+  taxReportedAt  DateTime?
+  voidedAt       DateTime?
+  voidReason     String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  allocations Allocation[]
+
+  @@unique([provider, providerRef])
+  @@index([accountId, paidOn])
+  @@index([organizationId, paidOn])
+}
+
+/// FIFO link from a payment to a charge. Rebuildable; never the source of the balance.
+model Allocation {
+  id          String   @id @default(uuid())
+  chargeId    String
+  charge      Charge   @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  paymentId   String
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  @@unique([chargeId, paymentId])
+  @@index([paymentId])
+}
+
+// ---------------------------------------------------------------- homework
+
+enum AssignmentStatus {
+  PENDING
+  ASSIGNED
+  SOLVED
+  REVIEWED
+  OVERDUE
+}
+
+enum SubmissionSource {
+  STUDENT
+  TUTOR
+}
+
+model Assignment {
+  id             String           @id @default(uuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId       String?
+  lesson         Lesson?          @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  title          String
+  description    String?
+  dueOn          DateTime?        @db.Date
+  status         AssignmentStatus @default(PENDING)
+  inviteSentAt   DateTime?
+  createdById    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  files       AssignmentFile[]
+  submissions Submission[]
+
+  @@index([studentId, status])
+  @@index([organizationId, dueOn])
+  @@index([lessonId])
+}
+
+model AssignmentFile {
+  id           String     @id @default(uuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         File       @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([assignmentId, fileId])
+  @@index([fileId])
+}
+
+model Submission {
+  id           String           @id @default(uuid())
+  assignmentId String
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  fileId       String?
+  file         File?            @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  note         String?
+  source       SubmissionSource @default(STUDENT)
+  submittedAt  DateTime         @default(now())
+
+  feedback Feedback?
+
+  @@index([assignmentId])
+  @@index([fileId])
+}
+
+model Feedback {
+  id           String     @id @default(uuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  comment      String?
+  score        Int?
+  reviewedById String?
+  /// The AI Draft this was approved from, if any.
+  draftId      String?
+  reviewedAt   DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Mastery {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  topic     String
+  /// 1 to 5
+  score     Int
+  notedById String?
+  notedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, topic])
+}
+
+// ---------------------------------------------------------------- files
+
+enum FileStorage {
+  DATABASE
+  BLOB
+}
+
+/// Every stored file: library, homework, submissions, receipts, photos, logo.
+model File {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation("OrgFiles", fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  storage        FileStorage  @default(DATABASE)
+  /// When storage = DATABASE.
+  data           Bytes?
+  /// When storage = BLOB.
+  storageKey     String?
+  uploadedById   String?
+  createdAt      DateTime     @default(now())
+
+  libraryItem     LibraryItem?
+  lessonFiles     LessonFile[]
+  assignmentFiles AssignmentFile[]
+  submissions     Submission[]
+  expenseReceipts Expense[]
+  orgLogo         Organization?    @relation("OrgLogo")
+  studentPhoto    Student?         @relation("StudentPhoto")
+  tutorPhoto      Tutor?           @relation("TutorPhoto")
+
+  @@unique([organizationId, sha256, name])
+  @@index([organizationId, createdAt])
+}
+
+/// A file the tutor keeps in their library (the Resources page).
+model LibraryItem {
+  id        String   @id @default(uuid())
+  fileId    String   @unique
+  file      File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  folder    String?
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------- messaging
+
+enum MessageKind {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+  INVITE
+  HOMEWORK_INVITE
+  HOMEWORK_SUBMITTED
+  LESSON_REMINDER
+  DAILY_SCHEDULE
+  BALANCE_REMINDER
+  STATEMENT
+  INTAKE_CONFIRMATION
+  OTHER
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+/// Every email the system sends. Replaces v1 EmailLog, HomeworkLog, HomeworkHistory.
+model Message {
+  id                String        @id @default(uuid())
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind              MessageKind
+  toEmail           String
+  subject           String
+  bodyText          String?
+  /// "lesson", "assignment", "account"
+  relatedType       String?
+  relatedId         String?
+  status            MessageStatus @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+  createdAt         DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([relatedType, relatedId])
+}
+
+// ---------------------------------------------------------------- expenses
+
+enum TaxTreatment {
+  BUSINESS_DIRECT
+  HOME_OFFICE_INDIRECT
+  PARTIAL_USE
+  PERSONAL
+}
+
+enum PaymentSourceType {
+  BUSINESS
+  PERSONAL
+}
+
+enum RecurringFrequency {
+  MONTHLY
+  YEARLY
+}
+
+/// organizationId null = system category available to every org.
+model ExpenseCategory {
+  id                     String        @id @default(uuid())
+  organizationId         String?
+  organization           Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                   String
+  defaultTaxTreatment    TaxTreatment
+  defaultBusinessPercent Int?
+  scheduleCLine          String?
+  archivedAt             DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  expenses  Expense[]
+  vendors   Vendor[]
+  recurring RecurringExpense[]
+
+  @@unique([organizationId, name])
+}
+
+/// Replaces v1 Vendor, FrequentVendor, AutomationRule, and ExpenseTemplate.
+model Vendor {
+  id                     String           @id @default(uuid())
+  organizationId         String
+  organization           Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                   String
+  defaultCategoryId      String?
+  defaultCategory        ExpenseCategory? @relation(fields: [defaultCategoryId], references: [id], onDelete: SetNull)
+  defaultTaxTreatment    TaxTreatment?
+  defaultBusinessPercent Int?
+  useCount               Int              @default(0)
+  lastUsedAt             DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  expenses  Expense[]
+  recurring RecurringExpense[]
+
+  @@unique([organizationId, name])
+}
+
+/// How the tutor paid for an expense: a card, an account. v1 PaymentMethod.
+model PaymentSource {
+  id             String            @id @default(uuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  type           PaymentSourceType @default(BUSINESS)
+  isDefault      Boolean           @default(false)
+  notes          String?
+  archivedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  expenses  Expense[]
+  recurring RecurringExpense[]
+
+  @@unique([organizationId, name])
+}
+
+model RecurringExpense {
+  id              String             @id @default(uuid())
+  organizationId  String
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  description     String
+  vendorId        String?
+  vendor          Vendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  categoryId      String
+  category        ExpenseCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  amountCents     Int
+  taxTreatment    TaxTreatment
+  businessPercent Int?
+  paymentSourceId String?
+  paymentSource   PaymentSource?     @relation(fields: [paymentSourceId], references: [id], onDelete: SetNull)
+  frequency       RecurringFrequency
+  nextOn          DateTime           @db.Date
+  endsOn          DateTime?          @db.Date
+  active          Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  expenses Expense[]
+
+  @@index([organizationId, active, nextOn])
+}
+
+model Expense {
+  id                 String            @id @default(uuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  spentOn            DateTime          @db.Date
+  description        String
+  vendorId           String?
+  vendor             Vendor?           @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  amountCents        Int
+  categoryId         String
+  category           ExpenseCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  taxTreatment       TaxTreatment
+  /// Required when taxTreatment is PARTIAL_USE.
+  businessPercent    Int?
+  paymentSourceId    String?
+  paymentSource      PaymentSource?    @relation(fields: [paymentSourceId], references: [id], onDelete: SetNull)
+  receiptFileId      String?
+  receipt            File?             @relation(fields: [receiptFileId], references: [id], onDelete: SetNull)
+  recurringExpenseId String?
+  recurringExpense   RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
+  /// Set when this expense is a tutor payout.
+  tutorId            String?
+  tutor              Tutor?            @relation(fields: [tutorId], references: [id], onDelete: SetNull)
+  notes              String?
+  taxReportedAt      DateTime?
+  voidedAt           DateTime?
+  voidReason         String?
+  createdById        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([organizationId, spentOn])
+  @@index([categoryId])
+  @@index([vendorId])
+  @@index([tutorId])
+  @@index([recurringExpenseId])
+}
+
+/// Per-year tax facts. Home office percent can change year to year; filedAt locks the year.
+model TaxYear {
+  id                    String       @id @default(uuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  year                  Int
+  homeSqft              Int?
+  officeSqft            Int?
+  /// 1250 = 12.50 percent
+  homeOfficeBasisPoints Int?
+  filedAt               DateTime?
+  notes                 String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([organizationId, year])
+}
+
+// ---------------------------------------------------------------- AI drafts
+
+enum DraftKind {
+  PARENT_REPORT
+  FEEDBACK
+  PRACTICE_SET
+  EXPENSE_FROM_RECEIPT
+  LESSON_NOTE
+}
+
+enum DraftStatus {
+  DRAFT
+  APPROVED
+  DISCARDED
+}
+
+/// Model-generated content waiting for a person to approve it.
+model Draft {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind           DraftKind
+  /// "student", "submission", "expense"
+  subjectType    String
+  subjectId      String
+  /// Model id used to produce the content.
+  model          String
+  inputTokens    Int?
+  outputTokens   Int?
+  content        Json
+  status         DraftStatus  @default(DRAFT)
+  createdById    String?
+  approvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, kind, status])
+  @@index([subjectType, subjectId])
+}

@@ -1,0 +1,26 @@
+{
+  "name": "resolventum-v2",
+  "version": "1.0.0",
+  "scripts": {
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "private": "true",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@types/pg": "^8.23.1",
+    "prisma": "^7.10.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0"
+  }
+}
