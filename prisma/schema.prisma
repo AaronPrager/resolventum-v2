@@ -408,6 +408,8 @@ model LessonFile {
 enum ChargeKind {
   LESSON
   FEE
+  /// Money a family paid on purpose beyond what was owed. Settles the balance and stays income.
+  TIP
   /// May be negative: a credit given to the account.
   ADJUSTMENT
 }

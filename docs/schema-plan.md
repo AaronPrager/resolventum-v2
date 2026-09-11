@@ -87,7 +87,7 @@ and a change of type.
 |---|---|
 | Account | the billing unit (rule 5) |
 | Guardian | parents and emergency contacts as rows, so a parent can have a login later |
-| Charge | an amount owed: a lesson, a fee, or a credit adjustment. Lessons do not carry money directly |
+| Charge | an amount owed: a lesson, a fee, a tip, or a credit adjustment. Lessons do not carry money directly |
 | AuthSession | revocable refresh tokens, so auth can move to httpOnly cookies |
 | Token | rule 8 |
 | File, LibraryItem, LessonFile, AssignmentFile | rule 7 |
@@ -109,7 +109,7 @@ and a change of type.
 | User.googleDrive*, User.fileStorageType | files live in the database now | dropped |
 | User.frequentVendors, purchaseCategories, paymentMethodDetails | JSON strings from before the ledger tables existed | dropped |
 | Lesson.notesFiles, Lesson.homeworkFiles | JSON strings of file metadata | anything that points at a live UserResource becomes a LessonFile; disk paths are gone |
-| Student.credit | rule 3 | non-zero credit becomes a negative Charge of kind ADJUSTMENT dated the import day, described "Credit balance carried over from v1" |
+| Student.credit | rule 3 | not imported. The v1 Students page computes its balance from lessons and payments and ignores this column. Aaron confirmed on 2026-09-11 that the ledger is right and the column is stale. The import still prints the non-zero values as a note |
 | Lesson.isPaid, Lesson.paidAmount | rule 3 | recomputed |
 | Transaction.category (enum) | replaced by categoryId | system categories seeded from the enum |
 
@@ -204,8 +204,9 @@ of foreign keys.
 1. Organization, then User, Membership, Invitation, Tutor. Business profile
    fields come from the owner's User row. Organization timezone is
    `America/New_York`.
-2. Account: one per distinct `Student.familyId`, named after the shared last
-   name, plus one per student with no family. Guardian rows from
+2. Account: one per student, with the same id as the student, since
+   production has no families. The script stops if it ever sees a `familyId`,
+   so a family in v1 data has to be handled on purpose. Guardian rows from
    `parentFullName`, `parentEmail`, `parentPhone`, `parentAddress`, and a
    second Guardian flagged emergency from `emergencyContactInfo` when present.
 3. Student, keeping ids. StudentProgress folds into two columns.
@@ -216,14 +217,20 @@ of foreign keys.
    the anchor (smallest v1 id) and one LessonStudent per non-shell row, each
    keeping the v1 row id. Solo lessons use the v1 id for both the Lesson and
    its LessonStudent. `recurringGroupId` groups become LessonSeries rows.
-6. Charges: one per LessonStudent, same id, `amountCents = round(price * 100)`.
-   `Student.credit` becomes a negative ADJUSTMENT charge. v1 Payments of type
-   ADJUSTMENT also become negative ADJUSTMENT charges.
+6. Charges: one per LessonStudent, same id, `amountCents = round(price * 100)`,
+   `chargedOn` is the New York date of the lesson. A v1 Payment of type
+   ADJUSTMENT becomes an ADJUSTMENT charge with the opposite sign, so the
+   balance is unchanged. `Student.credit` is reported, not imported (see the
+   Dropped table). Lessons before the import time get status COMPLETED, later
+   ones SCHEDULED.
 7. Payments of type PAYMENT and REFUND, keeping ids, account from the student.
    If a family payment's `familyId` disagrees with the student's account, the
    script stops and reports it.
-8. Allocations from LessonPayment, `chargeId = lessonId`. After import, run the
-   v2 allocation from scratch on a copy and diff the two. Both must agree.
+8. Allocations from LessonPayment, `chargeId = lessonId`, copied as they are.
+   Eight v1 lessons priced 130 carry 140 of allocations; v1 capped the
+   displayed `paidAmount` so it never showed. The verify script lists them.
+   Balances do not depend on allocations, so nothing is wrong with the money,
+   and the v2 FIFO service will rebuild them cleanly once it exists.
 9. Assignment, Submission, Feedback, Mastery, keeping ids. AssignmentFile from
    `libraryAttachments`, tolerating arrays that contain plain strings as well
    as `{ resourceId, fileName }` objects, and reporting any resourceId that
@@ -243,6 +250,19 @@ of foreign keys.
 13. TaxYear: one row per year that has any expense or payment, with the home
     office percent from the User or HomeOfficeProfile.
 14. Legacy deduction tables, only if production has rows.
+15. Post-import fixes: facts v1 had no way to record, kept as a list inside
+    the import script so every run applies them, each with a "[v2 fix]"
+    marker in its description so the verify script can leave them out of the
+    v1 comparison. Today: two tips (Zahar Lazarevich 50 on 2026-05-19, Jack
+    Weltman 70 on 2026-06-23) as Charge rows of kind TIP, and a temporary
+    ADJUSTMENT of 50 for Michail Shulkin, standing in for a v1 refund that
+    was entered as 80 instead of 130. Once the refund is corrected in v1 that
+    line is deleted. A tip settles the balance and stays income. v1 showed all three as
+    credit. Also an account merge: Nina and Timothy Marriott become one
+    "Marriott family" account, because v1 recorded every family payment on
+    Timothy after Nina was split off, leaving him 2,970 in credit and her
+    2,970 in debt. The verify script adds v1 students up by their v2 account,
+    so merged families still reconcile.
 
 ## 5. Verification after every import
 
@@ -263,6 +283,9 @@ exits non-zero on any mismatch.
 
 When all of these pass on a fresh production dump, the import is done, and
 everything after that is feature work.
+
+Status on 2026-09-11: `npm run import` then `npm run verify` pass every check
+against the 2026-09-10 dump. 95 of 95 balances match to the cent.
 
 ## 6. Decisions to make before the schema is generated
 
