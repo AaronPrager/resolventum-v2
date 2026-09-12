@@ -45,7 +45,6 @@ async function main() {
       (select count(*) from "Lesson" where "studentId" is not null) lessons,
       (select count(*) from "Payment" where type <> 'ADJUSTMENT') payments,
       (select count(*) from "Payment" where type = 'ADJUSTMENT') adjustments,
-      (select count(*) from "LessonPayment") allocations,
       (select count(*) from "Transaction") expenses,
       (select count(*) from "Transaction" where "isRecurring") recurring,
       (select count(*) from "Assignment") + (select count(*) from "StudentAssignedResource") assignments,
@@ -61,7 +60,6 @@ async function main() {
       (select count(*) from "LessonStudent") lessons,
       (select count(*) from "Payment") payments,
       (select count(*) from "Charge" where kind = 'ADJUSTMENT' and description not like '[v2 fix]%') adjustments,
-      (select count(*) from "Allocation") allocations,
       (select count(*) from "Expense") expenses,
       (select count(*) from "RecurringExpense") recurring,
       (select count(*) from "Assignment") assignments,
@@ -79,7 +77,6 @@ async function main() {
       (select coalesce(sum(round(price * 100)), 0) from "Lesson" where "studentId" is not null) billed,
       (select coalesce(sum(round(amount * 100)), 0) from "Payment" where type <> 'ADJUSTMENT') paid,
       (select coalesce(sum(round(-amount * 100)), 0) from "Payment" where type = 'ADJUSTMENT') adjusted,
-      (select coalesce(sum(round(amount * 100)), 0) from "LessonPayment") allocated,
       (select coalesce(sum(round("grossAmount" * 100)), 0) from "Transaction") spent
   `))[0];
   const m2 = (await v2(`
@@ -87,7 +84,6 @@ async function main() {
       (select coalesce(sum("amountCents"), 0) from "Charge" where kind = 'LESSON') billed,
       (select coalesce(sum("amountCents"), 0) from "Payment") paid,
       (select coalesce(sum("amountCents"), 0) from "Charge" where kind = 'ADJUSTMENT' and description not like '[v2 fix]%') adjusted,
-      (select coalesce(sum("amountCents"), 0) from "Allocation") allocated,
       (select coalesce(sum("amountCents"), 0) from "Expense") spent
   `))[0];
   for (const k of Object.keys(m1)) check(k, m1[k], m2[k], "cents");
@@ -160,23 +156,27 @@ async function main() {
   console.log(`     ${owed} owe money, ${credit} have credit, ${b1.length - owed - credit} at zero (before v2 fixes)`);
   for (const f of fixes) console.log(`     v2 fix: ${f.name} ${f.kind} ${money(f.amountCents)} on ${new Date(f.chargedOn).toISOString().slice(0, 10)}: ${String(f.description).replace('[v2 fix] ', '')}`);
 
-  console.log("\n== allocation sanity in v2");
+  console.log("\n== allocations in v2 (rebuilt by the FIFO service, not compared with v1)");
   const over = await v2(`
-    select c.id, c."chargedOn", c."amountCents", sum(a."amountCents") alloc
-    from "Charge" c join "Allocation" a on a."chargeId" = c.id
+    select c.id from "Charge" c join "Allocation" a on a."chargeId" = c.id
     group by c.id having sum(a."amountCents") > c."amountCents"`);
   const overPay = await v2(`
-    select p.id, p."paidOn", p."amountCents", sum(a."amountCents") alloc
-    from "Payment" p join "Allocation" a on a."paymentId" = p.id
+    select p.id from "Payment" p join "Allocation" a on a."paymentId" = p.id
     group by p.id having sum(a."amountCents") > p."amountCents"`);
-  console.log(`${over.length ? "warn" : "ok  "} charges with more allocated than owed: ${over.length}`);
-  for (const r of over) console.log(`     charge ${r.id} on ${new Date(r.chargedOn).toISOString().slice(0, 10)}: owed ${money(r.amountCents)}, allocated ${money(r.alloc)}`);
+  const perAccount = await v2(`
+    select a.id,
+      coalesce((select sum("amountCents") from "Charge" where "accountId" = a.id and "voidedAt" is null and "amountCents" > 0), 0)::bigint charges,
+      coalesce((select sum("amountCents") from "Payment" where "accountId" = a.id and "voidedAt" is null and "amountCents" > 0), 0)::bigint payments,
+      coalesce((select sum(al."amountCents") from "Allocation" al join "Charge" c on c.id = al."chargeId" where c."accountId" = a.id), 0)::bigint allocated
+    from "Account" a`);
+  const fifoBad = perAccount.filter((r) => Number(r.allocated) !== Math.min(Number(r.charges), Number(r.payments)));
+  const totalAlloc = perAccount.reduce((s, r) => s + Number(r.allocated), 0);
+  const totalUnalloc = perAccount.reduce((s, r) => s + Math.max(0, Number(r.payments) - Number(r.allocated)), 0);
+  console.log(`${over.length ? "FAIL" : "ok  "} charges with more allocated than owed: ${over.length}`);
   console.log(`${overPay.length ? "FAIL" : "ok  "} payments with more allocated than paid: ${overPay.length}`);
-  failures += overPay.length;
-  const unalloc = (await v2(`
-    select coalesce(sum(p."amountCents"), 0) - coalesce((select sum("amountCents") from "Allocation"), 0) c
-    from "Payment" p where p.kind = 'PAYMENT'`))[0];
-  console.log(`     unallocated payment money in v2: ${money(unalloc.c)}`);
+  console.log(`${fifoBad.length ? "FAIL" : "ok  "} accounts where allocated != min(charges, payments): ${fifoBad.length}`);
+  failures += over.length + overPay.length + fifoBad.length;
+  console.log(`     allocated ${money(totalAlloc)}, unallocated payment money ${money(totalUnalloc)}`);
 
   console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
   process.exitCode = failures === 0 ? 0 : 1;

@@ -7,8 +7,9 @@
 //   - dates that are dates use @db.Date; instants use DateTime
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider            = "prisma-client"
+  output              = "../generated/prisma"
+  importFileExtension = ""
 }
 
 datasource db {

@@ -6,8 +6,21 @@ and the import plan are in [docs/schema-plan.md](docs/schema-plan.md).
 ## Stack
 
 - TypeScript, Node 22
+- Next.js 16 (App Router, server components) on Vercel, Tailwind 4
 - Prisma 7 with the `pg` driver adapter, Postgres 17
-- The app framework is not chosen yet. Only the schema and scripts exist.
+- Vitest for unit tests
+
+## Layout
+
+```
+app/            Next.js routes and layout
+src/db.ts       the Prisma client (one per process)
+src/services/   domain logic: allocation (FIFO), balances
+scripts/        import-v1, verify-import, rebuild-allocations
+prisma/         schema and migrations
+docs/           schema plan and import mapping
+generated/      Prisma client output, not committed
+```
 
 ## Local databases
 
@@ -34,11 +47,28 @@ dropdb --if-exists resolventum_prod_copy && createdb resolventum_prod_copy && pg
 ## Commands
 
 ```bash
+npm run dev            # Next.js on http://localhost:3100
+npm run import         # wipe resolventum_v2 and import from resolventum_prod_copy
+npm run verify         # compare v1 and v2; exits non-zero on any mismatch
+npm run allocate       # rebuild FIFO allocations for every account
+npm test               # unit and database tests (Vitest); needs an imported resolventum_v2
+npm run test:e2e       # browser tests (Playwright) against the dev server and the imported data
+npm run typecheck
 npm run db:migrate     # create and apply a migration from schema changes
 npm run db:generate    # regenerate the client after a schema change
 npm run db:studio      # browse the v2 database
-npm run typecheck
 ```
+
+## How a screen gets tested
+
+1. Look at it in the browser against a few accounts you know.
+2. `npm run verify` proves the numbers under it match v1.
+3. A service test in `src/services/*.test.ts` asserts known facts of the
+   imported data (94 accounts, Marriott family at zero, and so on).
+4. A Playwright test in `e2e/` loads the screen and checks what it shows.
+
+The imported data is the fixture. `npm run import` takes three seconds and
+puts the database back to a known state.
 
 ## Rules the schema follows
 

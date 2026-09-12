@@ -13,6 +13,7 @@ import "dotenv/config";
 import { createHash, randomUUID } from "node:crypto";
 import pg from "pg";
 import { prisma } from "../src/db.js";
+import { rebuildOrganizationAllocations } from "../src/services/allocation.js";
 
 const SOURCE_URL =
   process.env.SOURCE_DATABASE_URL ?? "postgresql://faina@localhost:5432/resolventum_prod_copy";
@@ -487,19 +488,12 @@ async function main() {
   }
   await inChunks(paymentRows, (c) => prisma.payment.createMany({ data: c }));
   await prisma.charge.createMany({ data: adjustmentCharges });
-  const paymentIds = new Set(paymentRows.map((p) => p.id));
   console.log(`payments: ${paymentRows.length}, adjustments as charges: ${adjustmentCharges.length}`);
 
-  // 8. Allocations, copied as they are. Over-allocation is reported by the verify script.
-  const links = await q<Record<string, any>>(`select * from "LessonPayment"`);
-  const allocRows = [];
-  for (const lp of links) {
-    if (!lessonIds.has(lp.lessonId)) { warn(`allocation ${lp.id}: lesson ${lp.lessonId} not imported`); continue; }
-    if (!paymentIds.has(lp.paymentId)) { warn(`allocation ${lp.id}: payment ${lp.paymentId} not imported`); continue; }
-    allocRows.push({ id: lp.id, chargeId: lp.lessonId, paymentId: lp.paymentId, amountCents: cents(lp.amount), createdAt: lp.createdAt });
-  }
-  await inChunks(allocRows, (c) => prisma.allocation.createMany({ data: c }));
-  console.log(`allocations: ${allocRows.length}`);
+  // 8. Allocations are not copied. v1's rows carry known over-allocations, so the v2 FIFO
+  //    service rebuilds them from charges and payments at the end of the import (step 18).
+  const v1Links = await q<{ n: string }>(`select count(*)::text n from "LessonPayment"`);
+  notes.push(`v1 had ${v1Links[0].n} LessonPayment rows; v2 allocations are rebuilt by the FIFO service instead`);
 
   // 9. Progress notes.
   const progress = await q<Record<string, any>>(`select * from "LessonProgress" where "studentId" = any($1::text[])`, [[...studentIds]]);
@@ -822,6 +816,12 @@ async function main() {
   for (const row of legacy) {
     if (Number(row.n) > 0) notes.push(`legacy table ${row.t} has ${row.n} row(s), not imported`);
   }
+
+  // 18. Rebuild allocations with the v2 FIFO service, after every fix and merge is in.
+  const rebuilt = await rebuildOrganizationAllocations(prisma, orgId);
+  const allocCount = rebuilt.reduce((s, r) => s + r.allocations, 0);
+  const unallocated = rebuilt.reduce((s, r) => s + r.unallocatedCents, 0);
+  console.log(`allocations rebuilt: ${allocCount} rows over ${rebuilt.length} accounts, ${(unallocated / 100).toFixed(2)} unallocated`);
 
   // Report.
   console.log("\n== v2 row counts");

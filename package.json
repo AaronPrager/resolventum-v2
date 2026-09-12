@@ -8,21 +8,37 @@
     "db:studio": "prisma studio",
     "typecheck": "tsc --noEmit",
     "import": "tsx scripts/import-v1.ts",
-    "verify": "tsx scripts/verify-import.ts"
+    "verify": "tsx scripts/verify-import.ts",
+    "dev": "next dev -p 3100",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "test": "vitest run --exclude e2e/**",
+    "allocate": "tsx scripts/rebuild-allocations.ts",
+    "test:e2e": "playwright test"
   },
   "private": "true",
   "type": "module",
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.2",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "postcss": "^8.5.28",
     "prisma": "^7.10.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "dotenv": "^17.4.2",
-    "pg": "^8.23.0"
+    "next": "^16.3.4",
+    "pg": "^8.23.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }
