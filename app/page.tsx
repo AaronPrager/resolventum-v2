@@ -1,51 +1,48 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { accountBalances } from "@/src/services/balances";
+import { requireSession } from "@/src/auth/current";
 import { formatCents } from "@/src/lib/format";
+import { accountBalances } from "@/src/services/balances";
+import { Balance, Card, Empty, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const org = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!org) return <p>No organization yet. Run the import.</p>;
+  const session = await requireSession();
+  const org = { id: session.organizationId, name: session.organizationName };
   const balances = await accountBalances(prisma, org.id, new Date());
-  const open = balances.filter((b) => b.balanceCents !== 0);
+  const open = balances.filter((b) => b.balanceCents !== 0).sort((a, b) => b.balanceCents - a.balanceCents);
   const owed = open.filter((b) => b.balanceCents > 0).reduce((s, b) => s + b.balanceCents, 0);
   const credit = open.filter((b) => b.balanceCents < 0).reduce((s, b) => s - b.balanceCents, 0);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">{org.name}</h1>
-        <p className="text-sm text-gray-600">
-          {balances.length} accounts. Owed to you {formatCents(owed)}, credit held {formatCents(credit)}.
-        </p>
+      <PageHeader title={org.name} subtitle={<span>{balances.length} accounts. {open.length} with an open balance.</span>} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Stat label="Owed to you" value={formatCents(owed)} tone="owed" />
+        <Stat label="Credit held" value={formatCents(credit)} tone="credit" />
+        <Stat label="Accounts at zero" value={balances.length - open.length} tone="muted" />
       </div>
-      <table className="w-full text-sm" data-testid="balances">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-gray-600">
-            <th className="py-2 pr-4 font-medium">Account</th>
-            <th className="py-2 pr-4 font-medium">Students</th>
-            <th className="py-2 pr-4 text-right font-medium">Charged</th>
-            <th className="py-2 pr-4 text-right font-medium">Paid</th>
-            <th className="py-2 text-right font-medium">Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {open.map((b) => (
-            <tr key={b.accountId} className="border-b border-gray-100">
-              <td className="py-2 pr-4"><Link href={`/accounts/${b.accountId}`} className="text-blue-700 hover:underline">{b.name}</Link></td>
-              <td className="py-2 pr-4 text-gray-600">{b.studentNames.join(", ")}</td>
-              <td className="py-2 pr-4 text-right tabular-nums">{formatCents(b.chargedCents)}</td>
-              <td className="py-2 pr-4 text-right tabular-nums">{formatCents(b.paidCents)}</td>
-              <td className={`py-2 text-right tabular-nums ${b.balanceCents > 0 ? "text-red-700" : "text-green-700"}`}>
-                {b.balanceCents > 0 ? `owes ${formatCents(b.balanceCents)}` : `credit ${formatCents(-b.balanceCents)}`}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="text-xs text-gray-500">{balances.length - open.length} accounts at zero are not listed.</p>
+      <Card title="Open balances">
+        {open.length === 0 ? <Empty>Every account is at zero.</Empty> : (
+          <TableWrap>
+            <Table data-testid="balances">
+              <thead><tr><Th>Account</Th><Th className="hidden sm:table-cell">Students</Th><Th right className="hidden sm:table-cell">Charged</Th><Th right className="hidden sm:table-cell">Paid</Th><Th right>Balance</Th></tr></thead>
+              <tbody>
+                {open.map((b) => (
+                  <tr key={b.accountId} className="hover:bg-surface-2">
+                    <Td><Link href={`/accounts/${b.accountId}`} className="font-medium text-brand hover:underline">{b.name}</Link></Td>
+                    <Td className="hidden text-muted sm:table-cell">{b.studentNames.join(", ")}</Td>
+                    <Td right num className="hidden sm:table-cell">{formatCents(b.chargedCents)}</Td>
+                    <Td right num className="hidden sm:table-cell">{formatCents(b.paidCents)}</Td>
+                    <Td right num><Balance cents={b.balanceCents} /></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableWrap>
+        )}
+      </Card>
     </div>
   );
 }

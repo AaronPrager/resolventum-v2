@@ -46,7 +46,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   const entry = page.getByTestId("statement").getByRole("row", { name: new RegExp(SUBJECT) });
   await expect(entry).toContainText("2027-03-20");
   await expect(entry).toContainText("$130.00");
-  await expect(page.getByText("Closing balance").locator("xpath=following-sibling::dd[1]")).toContainText("$0.00");
+  await expect(page.getByTestId("closing-balance")).toContainText("$0.00");
 
   // Edit the price to 140.
   await page.goto(`/students/${student.id}`);
@@ -68,7 +68,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await expect(row).toContainText("scheduled");
   await expect(row).not.toContainText("not charged");
   await page.goto(`/accounts/${student.accountId}`);
-  await expect(page.getByText("Closing balance").locator("xpath=following-sibling::dd[1]")).toContainText("owes $10.00");
+  await expect(page.getByTestId("closing-balance")).toContainText("owes $10.00");
 });
 
 test("the form rejects a bad price", async ({ page }) => {

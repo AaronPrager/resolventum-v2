@@ -13,7 +13,7 @@ test("account statement runs a balance forward", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Estella Urman" }).click();
   await expect(page.getByRole("heading", { name: "Estella Urman" })).toBeVisible();
-  await expect(page.getByText("Closing balance").locator("xpath=following-sibling::dd[1]")).toContainText("credit $130.00");
+  await expect(page.getByTestId("closing-balance")).toContainText("credit $130.00");
   const rows = page.getByTestId("statement").locator("tbody tr");
   await expect(rows.first()).toBeVisible();
   await expect(rows.last()).toContainText("credit $130.00");

@@ -1,1 +1,67 @@
 @import "tailwindcss";
+
+/* Palette as runtime variables so dark mode can swap them. */
+:root {
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-3: #eceef2;
+  --fg: #16181d;
+  --muted: #5f6673;
+  --line: #e3e6eb;
+  --brand: #4f46e5;
+  --brand-strong: #4338ca;
+  --brand-soft: #eef0ff;
+  --brand-fg: #ffffff;
+  --owed: #b42318;
+  --owed-soft: #fdecec;
+  --credit: #067647;
+  --credit-soft: #e6f6ed;
+  --warn: #b54708;
+  --warn-soft: #fff4e5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #131519;
+    --surface-2: #1a1d23;
+    --surface-3: #23272f;
+    --fg: #eceef2;
+    --muted: #9aa3b2;
+    --line: #2b303a;
+    --brand: #7c74ff;
+    --brand-strong: #948dff;
+    --brand-soft: #23244a;
+    --brand-fg: #ffffff;
+    --owed: #f28b82;
+    --owed-soft: #3a1f1d;
+    --credit: #6fd39a;
+    --credit-soft: #1b3326;
+    --warn: #f0b060;
+    --warn-soft: #3a2b16;
+  }
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-fg: var(--brand-fg);
+  --color-owed: var(--owed);
+  --color-owed-soft: var(--owed-soft);
+  --color-credit: var(--credit);
+  --color-credit-soft: var(--credit-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html { color-scheme: light dark; }
+body { background: var(--surface-2); color: var(--fg); font-family: var(--font-sans); }
+input, select, textarea { background: var(--surface); color: var(--fg); }
+input[type="date"], input[type="time"] { min-height: 2.25rem; }
+::selection { background: var(--brand-soft); }

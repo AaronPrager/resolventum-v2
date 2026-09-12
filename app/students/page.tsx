@@ -1,50 +1,44 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { balanceClass, balanceText, formatDay } from "@/src/lib/format";
+import { requireSession } from "@/src/auth/current";
+import { formatDay } from "@/src/lib/format";
 import { listStudents } from "@/src/services/students";
+import { Badge, Balance, Card, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ archived?: string }> }) {
   const q = await searchParams;
   const includeArchived = q.archived === "1";
-  const org = await prisma.organization.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
+  const session = await requireSession();
+  const org = { id: session.organizationId, name: session.organizationName, timezone: session.timezone };
   const rows = await listStudents(prisma, org.id, { includeArchived });
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold">Students</h1>
-        <Link href={includeArchived ? "/students" : "/students?archived=1"} className="text-sm text-blue-700 hover:underline">
-          {includeArchived ? "Hide archived" : "Show archived"}
-        </Link>
-      </div>
-      <table className="w-full text-sm" data-testid="students">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-gray-600">
-            <th className="py-2 pr-4 font-medium">Student</th>
-            <th className="py-2 pr-4 font-medium">Grade</th>
-            <th className="py-2 pr-4 font-medium">Last lesson</th>
-            <th className="py-2 pr-4 font-medium">Next lesson</th>
-            <th className="py-2 pr-4 text-right font-medium">Lessons</th>
-            <th className="py-2 text-right font-medium">Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((s) => (
-            <tr key={s.id} className={`border-b border-gray-100 ${s.archived ? "text-gray-400" : ""}`}>
-              <td className="py-2 pr-4"><Link href={`/students/${s.id}`} className="text-blue-700 hover:underline">{s.name}</Link>{s.archived && <span className="ml-2 text-xs">archived</span>}</td>
-              <td className="py-2 pr-4">{s.grade ?? ""}</td>
-              <td className="py-2 pr-4">{s.lastLessonAt ? formatDay(s.lastLessonAt, org.timezone) : ""}</td>
-              <td className="py-2 pr-4">{s.nextLessonAt ? formatDay(s.nextLessonAt, org.timezone) : ""}</td>
-              <td className="py-2 pr-4 text-right tabular-nums">{s.lessonCount}</td>
-              <td className={`py-2 text-right tabular-nums ${balanceClass(s.balanceCents)}`}>
-                <Link href={`/accounts/${s.accountId}`} className="hover:underline">{balanceText(s.balanceCents)}</Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="text-xs text-gray-500">{rows.length} students. Balance is the account's, so siblings share one.</p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Students"
+        subtitle={`${rows.length} students. Balance is the account's, so siblings share one.`}
+        actions={<LinkButton href={includeArchived ? "/students" : "/students?archived=1"} variant="secondary">{includeArchived ? "Hide archived" : "Show archived"}</LinkButton>}
+      />
+      <Card>
+        <TableWrap>
+          <Table data-testid="students">
+            <thead><tr><Th>Student</Th><Th className="hidden sm:table-cell">Grade</Th><Th className="hidden md:table-cell">Last lesson</Th><Th>Next lesson</Th><Th right className="hidden sm:table-cell">Lessons</Th><Th right>Balance</Th></tr></thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id} className={`hover:bg-surface-2 ${s.archived ? "text-muted" : ""}`}>
+                  <Td><Link href={`/students/${s.id}`} className="font-medium text-brand hover:underline">{s.name}</Link>{s.archived && <Badge>archived</Badge>}</Td>
+                  <Td className="hidden sm:table-cell">{s.grade ?? ""}</Td>
+                  <Td className="hidden md:table-cell">{s.lastLessonAt ? formatDay(s.lastLessonAt, org.timezone) : ""}</Td>
+                  <Td>{s.nextLessonAt ? formatDay(s.nextLessonAt, org.timezone) : <span className="text-muted">none</span>}</Td>
+                  <Td right num className="hidden sm:table-cell">{s.lessonCount}</Td>
+                  <Td right num><Link href={`/accounts/${s.accountId}`} className="hover:underline"><Balance cents={s.balanceCents} /></Link></Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </TableWrap>
+      </Card>
     </div>
   );
 }

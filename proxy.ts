@@ -1,0 +1,22 @@
+/**
+ * Cheap gate: no session cookie, no app. The real check is requireSession()
+ * in every page and action; this just keeps unauthenticated traffic off them.
+ */
+import { NextResponse, type NextRequest } from "next/server";
+import { COOKIE_NAME } from "@/src/auth/constants";
+
+export function proxy(req: NextRequest) {
+  const { pathname, search } = req.nextUrl;
+  if (pathname.startsWith("/login")) return NextResponse.next();
+  if (!req.cookies.get(COOKIE_NAME)?.value) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+    return NextResponse.redirect(url);
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/((?!_next/|favicon.ico).*)"],
+};

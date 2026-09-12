@@ -3,8 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
+import { requireSession } from "@/src/auth/current";
 import { zonedToUtc } from "@/src/lib/tz";
 import { LessonError, cancelLesson, createLesson, restoreLesson, updateLesson } from "@/src/services/lessons";
+import { cancelLessonAndFuture, createSeries, updateLessonAndFuture } from "@/src/services/series";
 
 export interface ActionState {
   error?: string;
@@ -18,9 +20,12 @@ function dollarsToCents(s: string): number {
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return NaN;
   return Math.round(Number(s) * 100);
 }
+/** The signed-in organization's timezone, after checking the student belongs to it. */
 async function orgTimezone(studentId: string): Promise<string> {
-  const s = await prisma.student.findUnique({ where: { id: studentId }, select: { organization: { select: { timezone: true } } } });
-  return s?.organization.timezone ?? "America/New_York";
+  const session = await requireSession();
+  const s = await prisma.student.findFirst({ where: { id: studentId, organizationId: session.organizationId }, select: { id: true } });
+  if (!s) throw new LessonError("Student not found");
+  return session.timezone;
 }
 
 function readLessonForm(fd: FormData, timeZone: string) {
@@ -46,42 +51,66 @@ function readLessonForm(fd: FormData, timeZone: string) {
 
 export async function createLessonAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const studentId = str(fd, "studentId");
+  if (!studentId) return { error: "Pick a student" };
+  const repeat = str(fd, "repeat") === "on";
+  const returnTo = str(fd, "returnTo") || `/students/${studentId}`;
   try {
     const input = readLessonForm(fd, await orgTimezone(studentId));
-    await createLesson(prisma, { studentId, ...input });
+    if (repeat) {
+      const intervalWeeks = Number(str(fd, "intervalWeeks") || "1");
+      const until = str(fd, "until") || null;
+      await createSeries(prisma, { studentId, ...input, intervalWeeks, until });
+    } else {
+      await createLesson(prisma, { studentId, ...input });
+    }
   } catch (e) {
     if (e instanceof LessonError) return { error: e.message };
     throw e;
   }
   revalidatePath(`/students/${studentId}`);
-  redirect(`/students/${studentId}`);
+  revalidatePath("/calendar");
+  redirect(returnTo);
 }
 
 export async function updateLessonAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const lessonId = str(fd, "lessonId");
   const studentId = str(fd, "studentId");
+  const scope = str(fd, "scope") === "future" ? "future" : "one";
   try {
-    const input = readLessonForm(fd, await orgTimezone(studentId));
-    await updateLesson(prisma, lessonId, input);
+    const tz = await orgTimezone(studentId);
+    const input = readLessonForm(fd, tz);
+    if (scope === "future") await updateLessonAndFuture(prisma, lessonId, input, tz);
+    else await updateLesson(prisma, lessonId, input);
   } catch (e) {
     if (e instanceof LessonError) return { error: e.message };
     throw e;
   }
   revalidatePath(`/students/${studentId}`);
-  redirect(`/students/${studentId}`);
+  revalidatePath("/calendar");
+  redirect(str(fd, "returnTo") || `/students/${studentId}`);
 }
 
 export async function cancelLessonAction(fd: FormData): Promise<void> {
   const lessonId = str(fd, "lessonId");
   const studentId = str(fd, "studentId");
   const reason = str(fd, "reason") || "Cancelled";
-  await cancelLesson(prisma, lessonId, reason, { chargeAnyway: str(fd, "chargeAnyway") === "on" });
+  const tz = await orgTimezone(studentId);
+  if (str(fd, "scope") === "future") {
+    await cancelLessonAndFuture(prisma, lessonId, reason, tz);
+  } else {
+    await cancelLesson(prisma, lessonId, reason, { chargeAnyway: str(fd, "chargeAnyway") === "on" });
+  }
   revalidatePath(`/students/${studentId}`);
+  revalidatePath("/calendar");
+  const returnTo = str(fd, "returnTo");
+  if (returnTo) redirect(returnTo);
 }
 
 export async function restoreLessonAction(fd: FormData): Promise<void> {
   const lessonId = str(fd, "lessonId");
   const studentId = str(fd, "studentId");
+  await orgTimezone(studentId);
   await restoreLesson(prisma, lessonId);
   revalidatePath(`/students/${studentId}`);
+  revalidatePath("/calendar");
 }

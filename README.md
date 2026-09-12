@@ -13,10 +13,14 @@ and the import plan are in [docs/schema-plan.md](docs/schema-plan.md).
 ## Layout
 
 ```
-app/            Next.js routes and layout
+app/            Next.js routes, layout, navigation, and the login page
+src/auth/       passwords, sessions, and the Next.js cookie glue
+src/components/ the component set (ui.tsx): buttons, fields, cards, tables, money
 src/db.ts       the Prisma client (one per process)
-src/services/   domain logic: allocation (FIFO), balances
-scripts/        import-v1, verify-import, rebuild-allocations
+src/services/   domain logic: allocation (FIFO), balances, statement, lessons, series, calendar, payments
+src/lib/        timezone and recurrence helpers, formatting
+scripts/        import-v1, verify-import, rebuild-allocations, extend-series
+e2e/            Playwright tests
 prisma/         schema and migrations
 docs/           schema plan and import mapping
 generated/      Prisma client output, not committed
@@ -51,6 +55,7 @@ npm run dev            # Next.js on http://localhost:3100
 npm run import         # wipe resolventum_v2 and import from resolventum_prod_copy
 npm run verify         # compare v1 and v2; exits non-zero on any mismatch
 npm run allocate       # rebuild FIFO allocations for every account
+npm run extend-series  # generate lessons for open-ended weekly series six months ahead
 npm test               # unit and database tests (Vitest); needs an imported resolventum_v2
 npm run test:e2e       # browser tests (Playwright) against the dev server and the imported data
 npm run typecheck
@@ -69,6 +74,41 @@ npm run db:studio      # browse the v2 database
 
 The imported data is the fixture. `npm run import` takes three seconds and
 puts the database back to a known state.
+
+## Sign-in
+
+Cookie sessions on the `AuthSession` table (`src/auth/`). The cookie holds a
+random token, the row holds its SHA-256, and sign-out revokes the row. The v1
+password hashes were imported, so v1 passwords work. `proxy.ts` sends
+requests without a cookie to `/login`; every page and action then calls
+`requireSession()` and scopes its queries to the session's organization.
+
+Browser tests sign in as a local user, `e2e@resolventum.local`, which
+`e2e/auth.setup.ts` creates on this machine only.
+
+## Look and feel
+
+Colors are runtime CSS variables in `app/globals.css`, mapped into Tailwind
+with `@theme inline`, so dark mode is a media query that swaps the variables.
+Semantic names only: `surface`, `fg`, `muted`, `line`, `brand`, `owed`,
+`credit`, `warn`. Screens are built from `src/components/ui.tsx`. Tables
+scroll sideways on a phone inside `TableWrap`; columns that matter less get
+`hidden sm:table-cell`. Under 768px the side navigation becomes a bottom bar.
+
+## How lessons and money connect
+
+- A lesson is a Lesson row, one LessonStudent per seat, and one Charge per
+  seat. The charge is created with the lesson and dated the lesson's local day.
+- Editing price or date edits the charge. Cancelling voids the charge with a
+  reason, or keeps it if "still charge" is ticked. Nothing is deleted.
+- A weekly series is a LessonSeries row plus real lessons generated ahead of
+  time. Open-ended series are generated six months ahead and extended by
+  `npm run extend-series`. "This and future" edits and cancels walk the later
+  lessons of the series.
+- Payments and refunds are recorded on the account from its statement page.
+  Credits, fees, and tips are non-lesson charges. Any of them can be voided
+  with a reason; voided rows stay in the database and leave the statement.
+- Every change to charges or payments rebuilds the account's FIFO allocations.
 
 ## Rules the schema follows
 
