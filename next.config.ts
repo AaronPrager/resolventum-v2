@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // One self-contained folder for the container (see Dockerfile).
+  output: "standalone",
   // The Prisma client and pg driver run on the server only.
   serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
   agentRules: false,

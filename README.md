@@ -160,17 +160,23 @@ model with a fake (`setGenerator`).
 
 ## Deploying
 
-Vercel, one project.
+Google Cloud Run with Cloud SQL is the target; the exact commands are in
+[docs/deploy-google-cloud.md](docs/deploy-google-cloud.md). The app is one
+container (`Dockerfile`, Next.js standalone output) plus Postgres, so any
+host that runs containers works the same way. Vercel also works but caps
+request bodies at about 4.5 MB, which is too small for homework photo uploads
+unless files are moved to blob storage first.
 
-1. Postgres (Neon, Vercel Postgres, or any host). Set `DATABASE_URL` to the
-   pooled URL and `DIRECT_URL` to the direct one. Turn on point-in-time
-   restore at the provider.
+Whatever the host:
+
+1. Postgres. Set `DATABASE_URL`; set `DIRECT_URL` too if `DATABASE_URL` goes
+   through a pooler. Turn on point-in-time recovery at the provider.
 2. Environment: `CRON_SECRET` (random), `RESEND_API_KEY` and `EMAIL_FROM`
    (a verified domain in Resend), `GEMINI_API_KEY`, and `REGISTRATION_OPEN`.
 3. Migrations are a release step, not a build step: `npx prisma migrate deploy`
    with `DIRECT_URL` set, then deploy. The build is `prisma generate && next build`.
-4. `vercel.json` schedules `/api/cron` daily; Vercel sends `CRON_SECRET` as
-   the bearer token. `/api/health` is for an uptime check.
+4. Something must call `/api/cron` daily with `Authorization: Bearer <CRON_SECRET>`
+   (Cloud Scheduler on Google Cloud). `/api/health` is for an uptime check.
 5. Security headers, HSTS, `httpOnly` `secure` cookies, and the login gate
    are on by default. Files live in Postgres; move to blob storage when the
    `File` table passes a few hundred megabytes (`storage`/`storageKey` are

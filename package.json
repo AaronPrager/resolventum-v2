@@ -15,7 +15,8 @@
     "test": "vitest run --exclude e2e/**",
     "allocate": "tsx scripts/rebuild-allocations.ts",
     "test:e2e": "playwright test",
-    "extend-series": "tsx scripts/extend-series.ts"
+    "extend-series": "tsx scripts/extend-series.ts",
+    "build:next": "next build"
   },
   "private": "true",
   "type": "module",

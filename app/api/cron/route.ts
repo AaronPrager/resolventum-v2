@@ -5,8 +5,8 @@ import { runRecurring } from "@/src/services/expenses";
 export const dynamic = "force-dynamic";
 
 /**
- * Daily housekeeping, called by Vercel Cron (see vercel.json) with the
- * CRON_SECRET header Vercel adds. Safe to run any time: both jobs are idempotent.
+ * Daily housekeeping, called by Cloud Scheduler once a day with the
+ * CRON_SECRET bearer header. Safe to run any time: both jobs are idempotent.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
