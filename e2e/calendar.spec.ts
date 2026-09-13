@@ -5,6 +5,8 @@ import { expect, test } from "@playwright/test";
 import { prisma } from "../src/db";
 import { rebuildAccountAllocations } from "../src/services/allocation";
 
+test.beforeEach(({ page }) => { page.on("dialog", (d) => d.accept()); });
+
 const SUBJECT = `E2E series ${Date.now()}`;
 
 test.afterAll(async () => {

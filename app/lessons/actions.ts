@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { RoleError, requireSession, requireWriter } from "@/src/auth/current";
 import { zonedToUtc } from "@/src/lib/tz";
 import { LessonError, cancelLesson, createLesson, restoreLesson, updateLesson } from "@/src/services/lessons";
 import { cancelLessonAndFuture, createSeries, updateLessonAndFuture } from "@/src/services/series";
@@ -22,7 +22,7 @@ function dollarsToCents(s: string): number {
 }
 /** The signed-in organization's timezone, after checking the student belongs to it. */
 async function orgTimezone(studentId: string): Promise<string> {
-  const session = await requireSession();
+  const session = await requireWriter();
   const s = await prisma.student.findFirst({ where: { id: studentId, organizationId: session.organizationId }, select: { id: true } });
   if (!s) throw new LessonError("Student not found");
   return session.timezone;
@@ -64,7 +64,7 @@ export async function createLessonAction(_prev: ActionState, fd: FormData): Prom
       await createLesson(prisma, { studentId, ...input });
     }
   } catch (e) {
-    if (e instanceof LessonError) return { error: e.message };
+    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
     throw e;
   }
   revalidatePath(`/students/${studentId}`);
@@ -82,7 +82,7 @@ export async function updateLessonAction(_prev: ActionState, fd: FormData): Prom
     if (scope === "future") await updateLessonAndFuture(prisma, lessonId, input, tz);
     else await updateLesson(prisma, lessonId, input);
   } catch (e) {
-    if (e instanceof LessonError) return { error: e.message };
+    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
     throw e;
   }
   revalidatePath(`/students/${studentId}`);

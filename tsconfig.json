@@ -41,7 +41,8 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "generated"
+    ".next/dev",
+    "generated",
+    "node_modules"
   ]
 }

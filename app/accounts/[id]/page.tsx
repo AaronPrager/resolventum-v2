@@ -7,6 +7,9 @@ import { localDateStr } from "@/src/lib/tz";
 import { accountStatement } from "@/src/services/statement";
 import { AdjustmentForm, PaymentForm } from "@/app/payments/MoneyForms";
 import { voidEntryAction } from "@/app/payments/actions";
+import { ConfirmForm } from "@/src/components/ConfirmForm";
+import { emailConfigured } from "@/src/email/send";
+import { EmailStatement } from "./EmailStatement";
 import { Badge, Balance, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -57,10 +60,12 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         <Stat label="Closing balance" value={<Balance cents={st.closingBalanceCents} />} data-testid="closing-balance" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 print:hidden lg:grid-cols-2">
         <Card title="Record a payment or refund"><PaymentForm accountId={id} today={today} /></Card>
         <Card title="Credit, fee, or tip"><AdjustmentForm accountId={id} today={today} students={account.students.map((s) => ({ id: s.id, name: `${s.firstName} ${s.lastName}` }))} /></Card>
       </div>
+
+      <div className="print:hidden"><EmailStatement accountId={id} defaultTo={primary?.email ?? ""} from={from ? fmtDate(from) : ""} to={to ? fmtDate(to) : ""} configured={emailConfigured()} /></div>
 
       <Card
         title="Statement"
@@ -95,13 +100,13 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                     <Td right num><Balance cents={e.runningBalanceCents} /></Td>
                     <Td right>
                       {(e.kind === "payment" || e.subkind !== "LESSON") && (
-                        <form action={voidEntryAction} className="inline">
+                        <ConfirmForm action={voidEntryAction} className="inline print:hidden" message={`Void "${e.description}"? It leaves the statement and the balance changes. This is recorded, not deleted.`}>
                           <input type="hidden" name="accountId" value={id} />
                           <input type="hidden" name="kind" value={e.kind} />
                           <input type="hidden" name="id" value={e.id} />
                           <input type="hidden" name="reason" value="Voided from the statement" />
                           <Button variant="link" className="text-xs text-owed" aria-label={`Void ${e.description}`}>Void</Button>
-                        </form>
+                        </ConfirmForm>
                       )}
                     </Td>
                   </tr>

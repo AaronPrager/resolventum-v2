@@ -6,6 +6,8 @@ import { expect, test } from "@playwright/test";
 import { prisma } from "../src/db";
 import { rebuildAccountAllocations } from "../src/services/allocation";
 
+test.beforeEach(({ page }) => { page.on("dialog", (d) => d.accept()); });
+
 const TAG = `E2E money ${Date.now()}`;
 let accountId: string;
 

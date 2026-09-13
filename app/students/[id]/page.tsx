@@ -7,7 +7,8 @@ import { studentDetail } from "@/src/services/students";
 import { accountBalances } from "@/src/services/balances";
 import { LessonForm } from "@/app/lessons/LessonForm";
 import { cancelLessonAction, createLessonAction, restoreLessonAction } from "@/app/lessons/actions";
-import { Badge, Balance, Button, Card, Empty, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { ConfirmForm } from "@/src/components/ConfirmForm";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
         title={<span>{student.firstName} {student.lastName}{student.archivedAt && <Badge>archived</Badge>}</span>}
         back={{ href: "/students", label: "Students" }}
         subtitle={[student.grade && `Grade ${student.grade}`, student.schoolName, student.defaultSubject].filter(Boolean).join(" · ")}
+        actions={<><LinkButton href={`/students/${student.id}/update`} variant="primary">Parent update (AI)</LinkButton><LinkButton href={`/homework?student=${student.id}`} variant="secondary">Homework</LinkButton></>}
       />
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -139,10 +141,10 @@ function LessonTable({ title, rows, tz, studentId, testId }: { title: string; ro
                             <Button variant="link">Restore</Button>
                           </form>
                         ) : (
-                          <form action={cancelLessonAction} className="inline">
+                          <ConfirmForm action={cancelLessonAction} className="inline" message="Cancel this lesson? The charge is voided and the balance changes. You can restore it later.">
                             <input type="hidden" name="lessonId" value={s.lesson.id} /><input type="hidden" name="studentId" value={studentId} /><input type="hidden" name="reason" value="Cancelled" />
                             <Button variant="link" className="text-owed">Cancel</Button>
-                          </form>
+                          </ConfirmForm>
                         )}
                       </span>
                     </Td>

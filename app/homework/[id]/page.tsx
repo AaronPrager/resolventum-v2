@@ -1,0 +1,100 @@
+import Link from "next/link";
+import { headers } from "next/headers";
+import { notFound } from "next/navigation";
+import { prisma } from "@/src/db";
+import { requireSession } from "@/src/auth/current";
+import { aiConfigured } from "@/src/ai/generate";
+import { localDateOnly } from "@/src/lib/tz";
+import { assignmentDetail, effectiveStatus } from "@/src/services/homework";
+import { Badge, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Textarea } from "@/src/components/ui";
+import { deleteAssignmentAction, discardDraftAction, markAssignedAction } from "../actions";
+import { ConfirmForm } from "@/src/components/ConfirmForm";
+import { emailConfigured } from "@/src/email/send";
+import { EmailLink } from "./EmailLink";
+import { AssignmentEditor, DraftReview, FeedbackForm, LinkBox, AiButton } from "./parts";
+
+export const dynamic = "force-dynamic";
+
+function kb(n: number) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
+
+export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
+  const s = await requireSession();
+  const { id } = await params;
+  const d = await assignmentDetail(prisma, s.organizationId, id);
+  if (!d) notFound();
+  const a = d.assignment;
+  const status = effectiveStatus(a, localDateOnly(new Date(), s.timezone));
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3100"}`;
+  const parent = a.student.account.guardians[0];
+  const ai = aiConfigured();
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={a.title}
+        back={{ href: "/homework", label: "Homework" }}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Link href={`/students/${a.student.id}`} className="text-brand hover:underline">{a.student.firstName} {a.student.lastName}</Link><Badge tone={status === "REVIEWED" ? "credit" : status === "OVERDUE" ? "owed" : status === "SOLVED" ? "warn" : "brand"}>{status === "SOLVED" ? "to review" : status.toLowerCase()}</Badge>{a.dueOn && <span>due {a.dueOn.toISOString().slice(0, 10)}</span>}{a.lesson && <span>· from the lesson on {a.lesson.startsAt.toISOString().slice(0, 10)}</span>}</span>}
+        actions={a.submissions.length === 0 && (
+          <ConfirmForm action={deleteAssignmentAction} message="Delete this assignment? It has no submissions, so nothing else is lost."><input type="hidden" name="assignmentId" value={a.id} /><Button variant="danger">Delete</Button></ConfirmForm>
+        )}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Assignment">
+          <AssignmentEditor assignmentId={a.id} title={a.title} description={a.description ?? ""} dueOn={a.dueOn ? a.dueOn.toISOString().slice(0, 10) : ""} />
+          {a.files.length > 0 && (
+            <ul className="mt-3 space-y-1 text-sm">
+              {a.files.map((f) => <li key={f.file.id}><a className="text-brand hover:underline" href={`/api/files/${f.file.id}`}>{f.file.name}</a> <span className="text-muted">{kb(f.file.sizeBytes)}</span></li>)}
+            </ul>
+          )}
+        </Card>
+        <Card title="Student link">
+          <p className="mb-3 text-sm text-muted">
+            The student opens this link to see the assignment, download the files, and upload their work. No login needed.
+            {parent?.email && <> Parent: {parent.email}.</>}{a.student.email && <> Student: {a.student.email}.</>}
+          </p>
+          <LinkBox assignmentId={a.id} origin={origin} hasLink={d.hasLink} status={a.status} />
+          <div className="mt-3 border-t border-line pt-3"><EmailLink assignmentId={a.id} origin={origin} defaultTo={a.student.email ?? parent?.email ?? ""} configured={emailConfigured()} /></div>
+          {a.status === "PENDING" && (
+            <form action={markAssignedAction} className="mt-3"><input type="hidden" name="assignmentId" value={a.id} /><Button variant="secondary">Mark as sent to the student</Button></form>
+          )}
+        </Card>
+      </div>
+
+      <Card title={`Submissions (${a.submissions.length})`}>
+        {a.submissions.length === 0 ? <Empty>Nothing submitted yet.</Empty> : (
+          <div className="space-y-5">
+            {a.submissions.map((sub) => {
+              const draft = d.drafts.find((x) => x.subjectId === sub.id);
+              return (
+                <div key={sub.id} className="rounded-lg border border-line p-3">
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <span className="text-muted tabular-nums">{sub.submittedAt.toISOString().slice(0, 16).replace("T", " ")}</span>
+                    {sub.file ? <a className="font-medium text-brand hover:underline" href={`/api/files/${sub.file.id}`}>{sub.file.name}</a> : <span className="text-muted">no file</span>}
+                    {sub.file && <span className="text-muted">{kb(sub.file.sizeBytes)}</span>}
+                    <Badge>{sub.source.toLowerCase()}</Badge>
+                  </div>
+                  {sub.note && <p className="mt-2 text-sm">{sub.note}</p>}
+                  {sub.feedback ? (
+                    <div className="mt-3 rounded-md bg-credit-soft p-3 text-sm">
+                      <div className="mb-1 font-medium text-credit">Feedback{sub.feedback.score != null && ` · ${sub.feedback.score} of 5`}</div>
+                      <p className="whitespace-pre-line">{sub.feedback.comment}</p>
+                    </div>
+                  ) : draft ? (
+                    <DraftReview draft={{ id: draft.id, content: draft.content as Record<string, unknown>, model: draft.model }} assignmentId={a.id} discardAction={discardDraftAction} />
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {sub.file && <AiButton submissionId={sub.id} assignmentId={a.id} configured={ai} />}
+                      <FeedbackForm submissionId={sub.id} assignmentId={a.id} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}

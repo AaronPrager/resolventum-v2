@@ -34,6 +34,7 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "@google/genai": "^2.22.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "bcryptjs": "^3.0.3",
@@ -41,6 +42,8 @@
     "next": "^16.3.4",
     "pg": "^8.23.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "resend": "^6.28.0",
+    "zod": "^4.6.4"
   }
 }

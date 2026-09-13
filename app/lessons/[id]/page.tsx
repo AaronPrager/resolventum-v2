@@ -5,6 +5,7 @@ import { localDateStr, localTimeStr } from "@/src/lib/format";
 import { LessonForm } from "../LessonForm";
 import { cancelLessonAction, updateLessonAction } from "../actions";
 import { Badge, Button, Card, Checkbox, Field, Input, PageHeader, Radio } from "@/src/components/ui";
+import { ConfirmForm } from "@/src/components/ConfirmForm";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
       </Card>
       {lesson.status !== "CANCELLED" && (
         <Card title="Cancel this lesson">
-          <form action={cancelLessonAction} className="space-y-3">
+          <ConfirmForm action={cancelLessonAction} className="space-y-3" message="Cancel? Charges for the cancelled lessons are voided unless you ticked still charge.">
             <input type="hidden" name="lessonId" value={lesson.id} />
             <input type="hidden" name="studentId" value={seat.studentId} />
             <input type="hidden" name="returnTo" value={returnTo ?? `/students/${seat.studentId}`} />
@@ -59,7 +60,7 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
               </div>
             )}
             <Button variant="danger">Cancel lesson</Button>
-          </form>
+          </ConfirmForm>
         </Card>
       )}
     </div>

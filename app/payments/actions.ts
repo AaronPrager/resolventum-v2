@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { RoleError, requireSession, requireWriter } from "@/src/auth/current";
 import {
   PAYMENT_METHODS, PaymentError, type PaymentMethodInput,
   recordAdjustment, recordPayment, recordRefund, voidCharge, voidPayment,
@@ -25,7 +25,7 @@ function method(s: string): PaymentMethodInput {
   return (PAYMENT_METHODS as readonly string[]).includes(s) ? (s as PaymentMethodInput) : "OTHER";
 }
 async function ownedAccount(accountId: string): Promise<string> {
-  const session = await requireSession();
+  const session = await requireWriter();
   const a = await prisma.account.findFirst({ where: { id: accountId, organizationId: session.organizationId }, select: { id: true } });
   if (!a) throw new PaymentError("Account not found");
   return a.id;
@@ -50,7 +50,7 @@ export async function recordPaymentAction(_prev: ActionState, fd: FormData): Pro
       await recordPayment(prisma, { accountId, amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reference: str(fd, "reference"), notes: str(fd, "notes") });
     }
   } catch (e) {
-    if (e instanceof PaymentError) return { error: e.message };
+    if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
     throw e;
   }
   refresh(accountId);
@@ -67,7 +67,7 @@ export async function recordAdjustmentAction(_prev: ActionState, fd: FormData): 
     await ownedAccount(accountId);
     await recordAdjustment(prisma, { accountId, studentId: str(fd, "studentId") || null, kind, amountCents, chargedOn: str(fd, "chargedOn"), description: str(fd, "description") });
   } catch (e) {
-    if (e instanceof PaymentError) return { error: e.message };
+    if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
     throw e;
   }
   refresh(accountId);

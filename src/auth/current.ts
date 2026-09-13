@@ -36,3 +36,12 @@ export async function signOutAndClearCookie() {
   await coreSignOut(prisma, jar.get(COOKIE_NAME)?.value);
   jar.delete(COOKIE_NAME);
 }
+
+export class RoleError extends Error {}
+
+/** Accountants can read everything and change nothing. Owners and tutors can write. */
+export async function requireWriter(): Promise<SessionUser> {
+  const s = await requireSession();
+  if (s.role === "ACCOUNTANT") throw new RoleError("Your role is read-only. Ask the owner to make changes.");
+  return s;
+}

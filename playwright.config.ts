@@ -8,7 +8,7 @@ export default defineConfig({
   fullyParallel: false,
   use: { baseURL: "http://localhost:3100" },
   webServer: {
-    command: "npm run dev",
+    command: "DISABLE_RATE_LIMIT=1 npm run dev",
     url: "http://localhost:3100/login",
     reuseExistingServer: true,
     timeout: 120_000,
