@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentSession } from "@/src/auth/current";
+import { currentSession, devAutoLogin } from "@/src/auth/current";
 import { LoginForm } from "./LoginForm";
 import { AuthShell } from "@/app/AuthShell";
 import { registrationOpen } from "@/src/auth/registration";
@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reset?: string }> }) {
   const { next, reset } = await searchParams;
-  if (await currentSession()) redirect(next && next.startsWith("/") ? next : "/");
+  const to = next && next.startsWith("/") ? next : "/";
+  if (await currentSession()) redirect(to);
+  // Development: no form, a session is opened for the configured person and you land in the app.
+  if (devAutoLogin()) redirect(`/api/dev-login?next=${encodeURIComponent(to)}`);
   return (
     <AuthShell>
         <h1 className="mb-1 text-xl font-semibold tracking-[-0.02em]">Welcome back</h1>

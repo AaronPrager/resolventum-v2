@@ -27,7 +27,8 @@ export async function loginAction(_prev: LoginState, fd: FormData): Promise<Logi
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
 }
 
+/** Sign out lands on the front page, the same thing a visitor sees. */
 export async function logoutAction(): Promise<void> {
   await signOutAndClearCookie();
-  redirect("/login");
+  redirect("/");
 }

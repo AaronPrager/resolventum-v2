@@ -83,7 +83,7 @@ puts the database back to a known state.
 
 ## Accounts, sign-in, roles
 
-On localhost, set `DEV_AUTO_LOGIN=true` in `.env` (or an email) to skip the sign-in page; it does nothing outside development, and the browser tests turn it off.
+On localhost, set `DEV_AUTO_LOGIN=true` in `.env` (or an email) and pressing "Log in" opens a session for that person without a password. The landing page, the redirects, and sign out behave as in production. It does nothing outside development, and the browser tests turn it off.
 
 `/signup` creates a school with its owner. It is closed unless `REGISTRATION_OPEN=true`; closed, the page, the sign-in link, and the landing page say that Resolventum is currently not accepting new accounts. Invitations still work.
 `/forgot` emails a one-hour reset link; `/reset/<token>` sets the password

@@ -53,6 +53,22 @@ export async function signIn(db: PrismaClient, email: string, password: string, 
   return token;
 }
 
+/**
+ * Open a session for a user without checking a password. Only the development
+ * sign-in route calls this; it is never reachable in production.
+ */
+export async function signInWithoutPassword(db: PrismaClient, userId: string, meta: { userAgent?: string | null; ip?: string | null } = {}) {
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user || user.deletedAt) throw new AuthError("User not found");
+  const membership = await db.membership.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "asc" } });
+  if (!membership) throw new AuthError("This account has no organization");
+  const token = randomBytes(32).toString("base64url");
+  await db.authSession.create({
+    data: { userId: user.id, tokenHash: hashToken(token), userAgent: meta.userAgent?.slice(0, 300) ?? null, ip: meta.ip?.slice(0, 64) ?? null, expiresAt: new Date(Date.now() + SESSION_DAYS * 86400000) },
+  });
+  return token;
+}
+
 /** Resolve a cookie token to the signed-in user, or null. Extends the session when it is past half life. */
 export async function sessionFromToken(db: PrismaClient, token: string | undefined | null): Promise<SessionUser | null> {
   if (!token) return null;

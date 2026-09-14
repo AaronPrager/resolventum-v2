@@ -8,10 +8,12 @@ import { prisma } from "../db";
 import { COOKIE_NAME, SESSION_DAYS, type SessionUser, sessionFromToken, signIn as coreSignIn, signOut as coreSignOut } from "./session";
 
 /**
- * Development only: with DEV_AUTO_LOGIN set, a request with no cookie is
- * treated as that person, so nobody types a password on localhost. "true"
- * means the first owner; an email means that user. Never in production, and
- * the browser tests clear the variable so they still exercise real sign-in.
+ * Development only: with DEV_AUTO_LOGIN set, pressing "Log in" opens a real
+ * session for that person without a password. "true" means the first owner;
+ * an email means that user. Everything else is as in production: the landing
+ * page shows when signed out, app pages send you to sign in, and sign out
+ * ends the session. Never outside NODE_ENV=development; the browser tests
+ * clear the variable so they still type a password.
  */
 export function devAutoLogin(): string | null {
   if (process.env.NODE_ENV !== "development") return null;
@@ -19,21 +21,21 @@ export function devAutoLogin(): string | null {
   return v && v !== "false" && v !== "0" ? v : null;
 }
 
-async function devSession(): Promise<SessionUser | null> {
+/** The user the dev sign-in opens a session for, or null when the setting is off or nobody matches. */
+export async function devAutoLoginUserId(): Promise<string | null> {
   const who = devAutoLogin();
   if (!who) return null;
   const m = await prisma.membership.findFirst({
     where: who.includes("@") ? { user: { email: who.toLowerCase(), deletedAt: null } } : { role: "OWNER", user: { deletedAt: null } },
-    include: { user: true, organization: true, tutor: { select: { timezone: true } } },
+    select: { userId: true },
     orderBy: { createdAt: "asc" },
   });
-  if (!m) return null;
-  return { userId: m.user.id, email: m.user.email, name: m.user.name, organizationId: m.organizationId, organizationName: m.organization.name, timezone: (m.role === "TUTOR" && m.tutor?.timezone) || m.organization.timezone, organizationTimezone: m.organization.timezone, role: m.role, tutorId: m.tutorId };
+  return m?.userId ?? null;
 }
 
 export async function currentSession(): Promise<SessionUser | null> {
   const jar = await cookies();
-  return (await sessionFromToken(prisma, jar.get(COOKIE_NAME)?.value)) ?? devSession();
+  return sessionFromToken(prisma, jar.get(COOKIE_NAME)?.value);
 }
 
 export async function requireSession(): Promise<SessionUser> {
@@ -45,6 +47,11 @@ export async function requireSession(): Promise<SessionUser> {
 export async function signInAndSetCookie(email: string, password: string) {
   const h = await headers();
   const token = await coreSignIn(prisma, email, password, { userAgent: h.get("user-agent"), ip: h.get("x-forwarded-for")?.split(",")[0] });
+  await setSessionCookie(token);
+}
+
+/** The session cookie, the same way for a password sign-in, an invitation, or the dev sign-in. */
+export async function setSessionCookie(token: string) {
   const jar = await cookies();
   jar.set(COOKIE_NAME, token, {
     httpOnly: true,
