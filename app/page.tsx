@@ -109,7 +109,7 @@ export default async function Home() {
           <p className="mt-2 text-xs"><Link href="/leads" className="text-brand hover:underline">Work the pipeline</Link></p>
         </Card>
       </div>
-      <p className="text-xs text-muted">Balance colours: <Balance cents={1} /> means the family owes, <Balance cents={-1} /> means they paid ahead.</p>
+      <p className="text-xs text-muted">Balance colors: <Balance cents={1} /> means the family owes, <Balance cents={-1} /> means they paid ahead.</p>
     </div>
   );
 }
