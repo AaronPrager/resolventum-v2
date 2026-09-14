@@ -4,24 +4,29 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, CalendarDays, CreditCard, Ellipsis, GraduationCap, Mail, Receipt, Settings, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, CalendarDays, CreditCard, Ellipsis, GraduationCap, HandCoins, Home, Mail, Receipt, Settings, UserPlus, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
 interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean }
 
-const teach: Item[] = [
-  { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p === "/" || p.startsWith("/calendar") || p.startsWith("/lessons") },
-  { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") },
-  { href: "/homework", label: "Homework", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") || p.startsWith("/library") },
-  { href: "/emails", label: "Emails", icon: Mail, match: (p) => p.startsWith("/emails") },
-];
-const money: Item[] = [
-  { href: "/accounts", label: "Accounts", icon: Wallet, match: (p) => p.startsWith("/accounts") },
-  { href: "/payments", label: "Payments", icon: CreditCard, match: (p) => p.startsWith("/payments") },
-  { href: "/expenses", label: "Expenses", icon: Receipt, match: (p) => p.startsWith("/expenses") },
-  { href: "/reports", label: "Reports", icon: BarChart3, match: (p) => p.startsWith("/reports") },
-];
+const home: Item = { href: "/", label: "Home", icon: Home, match: (p) => p === "/" };
+const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar") || p.startsWith("/lessons") };
+const students: Item = { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") };
+const homework: Item = { href: "/homework", label: "Homework", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") || p.startsWith("/library") };
+const emails: Item = { href: "/emails", label: "Emails", icon: Mail, match: (p) => p.startsWith("/emails") };
+const leads: Item = { href: "/leads", label: "Leads", icon: UserPlus, match: (p) => p.startsWith("/leads") };
+const accounts: Item = { href: "/accounts", label: "Accounts", icon: Wallet, match: (p) => p.startsWith("/accounts") };
+const payments: Item = { href: "/payments", label: "Payments", icon: CreditCard, match: (p) => p.startsWith("/payments") };
+const expenses: Item = { href: "/expenses", label: "Expenses", icon: Receipt, match: (p) => p.startsWith("/expenses") };
+const reports: Item = { href: "/reports", label: "Reports", icon: BarChart3, match: (p) => p.startsWith("/reports") };
+const earnings: Item = { href: "/earnings", label: "My pay", icon: HandCoins, match: (p) => p.startsWith("/earnings") };
 const settings: Item = { href: "/settings", label: "Settings", icon: Settings, match: (p) => p.startsWith("/settings") };
+
+/** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages. */
+function menus(role: string) {
+  if (role === "TUTOR") return { teach: [calendar, students, homework, emails], money: [earnings], bar: [calendar, students, homework, earnings], more: [emails, settings] };
+  return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, settings] };
+}
 
 function NavLink({ it, active }: { it: Item; active: boolean }) {
   const Icon = it.icon;
@@ -39,8 +44,9 @@ function NavLink({ it, active }: { it: Item; active: boolean }) {
   );
 }
 
-export function SideNav() {
+export function SideNav({ role }: { role: string }) {
   const path = usePathname();
+  const { teach, money } = menus(role);
   return (
     <nav className="flex flex-1 flex-col gap-5" aria-label="Main">
       <div className="flex flex-col gap-0.5">{teach.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} />)}</div>
@@ -53,11 +59,9 @@ export function SideNav() {
   );
 }
 
-const bar: Item[] = [teach[0], teach[1], money[0], money[1]];
-const more: Item[] = [teach[2], teach[3], money[2], money[3], settings];
-
-export function BottomNav() {
+export function BottomNav({ role }: { role: string }) {
   const path = usePathname();
+  const { bar, more } = menus(role);
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
   const moreActive = more.some((it) => it.match(path));

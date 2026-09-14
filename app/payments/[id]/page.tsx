@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { formatCents, formatDate, formatWhen } from "@/src/lib/format";
 import { Badge, Card, PageHeader } from "@/src/components/ui";
 import { PaymentEditForm } from "../MoneyForms";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Payment" };
 
 export default async function PaymentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ returnTo?: string }> }) {
-  const s = await requireSession();
+  const s = await requireMoney();
   const { id } = await params;
   const { returnTo } = await searchParams;
   const p = await prisma.payment.findFirst({

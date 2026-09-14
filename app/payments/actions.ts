@@ -8,6 +8,8 @@ import {
   recordAdjustment, recordPayment, recordRefund, updatePayment, voidCharge, voidPayment,
 } from "@/src/services/payments";
 import { redirect } from "next/navigation";
+import { auditAs } from "@/src/services/audit";
+import { formatCents } from "@/src/lib/format";
 
 export interface ActionState {
   error?: string;
@@ -25,11 +27,11 @@ function dollarsToCents(s: string): number {
 function method(s: string): PaymentMethodInput {
   return (PAYMENT_METHODS as readonly string[]).includes(s) ? (s as PaymentMethodInput) : "OTHER";
 }
-async function ownedAccount(accountId: string): Promise<string> {
+async function ownedAccount(accountId: string) {
   const session = await requireWriter();
-  const a = await prisma.account.findFirst({ where: { id: accountId, organizationId: session.organizationId }, select: { id: true } });
+  const a = await prisma.account.findFirst({ where: { id: accountId, organizationId: session.organizationId }, select: { id: true, name: true } });
   if (!a) throw new PaymentError("Account not found");
-  return a.id;
+  return { session, account: a };
 }
 function refresh(accountId: string) {
   revalidatePath(`/accounts/${accountId}`);
@@ -44,12 +46,11 @@ export async function recordPaymentAction(_prev: ActionState, fd: FormData): Pro
   if (Number.isNaN(amountCents)) return { error: "Amount must be a number like 130 or 130.00" };
   const isRefund = str(fd, "kind") === "REFUND";
   try {
-    await ownedAccount(accountId);
-    if (isRefund) {
-      await recordRefund(prisma, { accountId, amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reason: str(fd, "notes"), reference: str(fd, "reference") });
-    } else {
-      await recordPayment(prisma, { accountId, amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reference: str(fd, "reference"), notes: str(fd, "notes") });
-    }
+    const { session, account } = await ownedAccount(accountId);
+    const p = isRefund
+      ? await recordRefund(prisma, { accountId, amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reason: str(fd, "notes"), reference: str(fd, "reference") })
+      : await recordPayment(prisma, { accountId, amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reference: str(fd, "reference"), notes: str(fd, "notes") });
+    await auditAs(prisma, session, { action: isRefund ? "refund.record" : "payment.record", subjectType: "payment", subjectId: p.id, summary: `${account.name}: ${formatCents(amountCents)} by ${method(str(fd, "method")).toLowerCase()}${isRefund ? `, ${str(fd, "notes")}` : ""}` });
   } catch (e) {
     if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
     throw e;
@@ -65,8 +66,9 @@ export async function recordAdjustmentAction(_prev: ActionState, fd: FormData): 
   const kindRaw = str(fd, "kind");
   const kind = kindRaw === "FEE" || kindRaw === "TIP" ? kindRaw : "CREDIT";
   try {
-    await ownedAccount(accountId);
-    await recordAdjustment(prisma, { accountId, studentId: str(fd, "studentId") || null, kind, amountCents, chargedOn: str(fd, "chargedOn"), description: str(fd, "description") });
+    const { session, account } = await ownedAccount(accountId);
+    const c = await recordAdjustment(prisma, { accountId, studentId: str(fd, "studentId") || null, kind, amountCents, chargedOn: str(fd, "chargedOn"), description: str(fd, "description") });
+    await auditAs(prisma, session, { action: kind === "CREDIT" ? "credit.record" : kind === "FEE" ? "fee.record" : "tip.record", subjectType: "charge", subjectId: c.id, summary: `${account.name}: ${formatCents(amountCents)}, ${str(fd, "description")}` });
   } catch (e) {
     if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
     throw e;
@@ -78,9 +80,11 @@ export async function recordAdjustmentAction(_prev: ActionState, fd: FormData): 
 export async function voidEntryAction(fd: FormData): Promise<void> {
   const accountId = str(fd, "accountId");
   const reason = str(fd, "reason") || "Voided";
-  await ownedAccount(accountId);
-  if (str(fd, "kind") === "payment") await voidPayment(prisma, str(fd, "id"), reason);
+  const { session, account } = await ownedAccount(accountId);
+  const kind = str(fd, "kind") === "payment" ? "payment" : "charge";
+  if (kind === "payment") await voidPayment(prisma, str(fd, "id"), reason);
   else await voidCharge(prisma, str(fd, "id"), reason);
+  await auditAs(prisma, session, { action: `${kind}.void`, subjectType: kind, subjectId: str(fd, "id"), summary: `${account.name}: ${reason}` });
   refresh(accountId);
 }
 
@@ -94,6 +98,7 @@ export async function updatePaymentAction(_p: ActionState, fd: FormData): Promis
     await updatePayment(prisma, session.organizationId, id, {
       amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reference: str(fd, "reference"), notes: str(fd, "notes"), refundReason: str(fd, "refundReason"),
     });
+    await auditAs(prisma, session, { action: "payment.update", subjectType: "payment", subjectId: id, summary: `${formatCents(amountCents)} on ${str(fd, "paidOn")} by ${method(str(fd, "method")).toLowerCase()}` });
   } catch (e) {
     if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
     throw e;

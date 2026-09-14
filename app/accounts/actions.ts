@@ -19,7 +19,7 @@ export async function updateAccountAction(_p: ActionState, fd: FormData): Promis
   const accountId = str(fd, "accountId");
   try {
     const s = await requireWriter();
-    await updateAccount(prisma, s.organizationId, accountId, { name: str(fd, "name"), notes: str(fd, "notes") });
+    await updateAccount(prisma, s.organizationId, accountId, { name: str(fd, "name"), notes: str(fd, "notes"), emailReminders: fd.get("emailReminders") === "on", emailNotes: fd.get("emailNotes") === "on" });
   } catch (e) {
     const m = known(e);
     if (m) return { error: m };

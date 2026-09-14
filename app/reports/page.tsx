@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { formatCents } from "@/src/lib/format";
 import { dateOnlyFromStr, localDateOnly } from "@/src/lib/tz";
 import { incomeByKind, monthlyReport, studentsByRevenue, tutorPay, yearSummary } from "@/src/services/reports";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
-  const s = await requireSession();
+  const s = await requireMoney();
   const q = await searchParams;
   const year = q.year && /^\d{4}$/.test(q.year) ? Number(q.year) : new Date().getFullYear();
   const now = new Date();

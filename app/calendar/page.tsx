@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireSession, tutorScope } from "@/src/auth/current";
 import { formatCents, formatTime } from "@/src/lib/format";
 import { localDateStr, zonedToUtc } from "@/src/lib/tz";
 import { calendarLessons, type CalendarLesson } from "@/src/services/calendar";
@@ -71,7 +71,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // Month is the default; day and week are shown only when asked for.
   const view: View = q.view === "day" || isDate(q.day) ? "day" : q.view === "week" || isDate(q.week) ? "week" : "month";
   const tutors = await prisma.tutor.findMany({ where: { organizationId: org.id, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } });
-  const tutor = q.tutor === "none" || tutors.some((t) => t.id === q.tutor) ? q.tutor! : "";
+  // A tutor login sees only their own lessons; the filter is fixed and hidden.
+  const scope = tutorScope(session);
+  const tutor = scope ?? (q.tutor === "none" || tutors.some((t) => t.id === q.tutor) ? q.tutor! : "");
   const tq = tutor ? `&tutor=${tutor}` : "";
   const tutorName = tutor === "none" ? "no tutor set" : tutors.find((t) => t.id === tutor)?.name;
   const keep = (lessons: CalendarLesson[]) => (tutor ? lessons.filter((l) => (tutor === "none" ? !l.tutor : l.tutor?.id === tutor)) : lessons);
@@ -86,7 +88,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const controls = (
     <>
       <ViewSwitch view={view} hrefs={{ day: viewHref("day"), week: viewHref("week"), month: viewHref("month") }} />
-      {tutors.length > 0 && <TutorFilter tutors={tutors} value={tutor} hrefFor={hrefFor} />}
+      {tutors.length > 0 && !scope && <TutorFilter tutors={tutors} value={tutor} hrefFor={hrefFor} />}
     </>
   );
   const subtitleFor = (n: number, cents: number) => `${n} lesson${n === 1 ? "" : "s"}, ${formatCents(cents)}${tutorName ? ` · ${tutorName}` : ""}`;

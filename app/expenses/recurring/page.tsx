@@ -1,5 +1,5 @@
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { formatCents, formatDate } from "@/src/lib/format";
 import { listCategories, listVendors } from "@/src/services/expenses";
 import { Badge, Button, Card, Empty, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
@@ -9,7 +9,7 @@ import { RecurringForm } from "./RecurringForm";
 export const dynamic = "force-dynamic";
 
 export default async function RecurringPage() {
-  const s = await requireSession();
+  const s = await requireMoney();
   const [rows, categories, vendors, sources] = await Promise.all([
     prisma.recurringExpense.findMany({ where: { organizationId: s.organizationId }, include: { vendor: true, category: true, _count: { select: { expenses: true } } }, orderBy: [{ active: "desc" }, { nextOn: "asc" }] }),
     listCategories(prisma, s.organizationId), listVendors(prisma, s.organizationId),

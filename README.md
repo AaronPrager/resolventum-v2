@@ -13,12 +13,15 @@ and the import plan are in [docs/schema-plan.md](docs/schema-plan.md).
 ## Layout
 
 ```
-app/            Next.js routes, layout, navigation, and the login page
+app/            Next.js routes, layout, navigation, and the login page. / is the owner
+                dashboard; /leads is the pipeline; /earnings is a tutor's own pay page
 src/auth/       passwords, sessions, and the Next.js cookie glue
 src/components/ the component set (ui.tsx): buttons, fields, cards, tables, money
 src/db.ts       the Prisma client (one per process)
-src/services/   domain logic: allocation, balances, statement, lessons, series, calendar,
-                payments, calendarFeed, files, homework, expenses, reports
+src/services/   domain logic: allocation, balances, statement, lessons (with the cancellation
+                policy, no-shows, and make-up credits), series, holidays, calendar, payments,
+                calendarFeed, files, homework, expenses, reports, payroll (pay rules per tutor
+                and subject), sessionNotes, leads, dashboard, reminders, audit, exportData
 src/ai/         Gemini wrapper (generate.ts) and the draft builders (drafts.ts)
 src/lib/        timezone and recurrence helpers, formatting
 scripts/        import-v1, verify-import, rebuild-allocations, extend-series

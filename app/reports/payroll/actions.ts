@@ -5,6 +5,7 @@ import { prisma } from "@/src/db";
 import { RoleError, requireWriter } from "@/src/auth/current";
 import { ExpenseError } from "@/src/services/expenses";
 import { PayrollError, recordTutorPay } from "@/src/services/payroll";
+import { auditAs } from "@/src/services/audit";
 
 export interface ActionState { error?: string; ok?: string }
 
@@ -12,6 +13,7 @@ export async function recordTutorPayAction(_p: ActionState, fd: FormData): Promi
   try {
     const s = await requireWriter();
     const e = await recordTutorPay(prisma, s.organizationId, String(fd.get("tutorId")), String(fd.get("month")), s.userId);
+    await auditAs(prisma, s, { action: "payroll.record", subjectType: "tutor", subjectId: String(fd.get("tutorId")), summary: `${e.description}: ${(e.amountCents / 100).toFixed(2)}` });
     revalidatePath("/reports/payroll");
     revalidatePath("/expenses");
     return { ok: `Recorded ${(e.amountCents / 100).toFixed(2)}` };

@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { aiConfigured } from "@/src/ai/generate";
 import { formatCents, formatDate } from "@/src/lib/format";
 import { dateOnlyFromStr, localDateStr } from "@/src/lib/tz";
 import { listCategories, listExpenses, listVendors, deductibleCents, type TaxTreatment } from "@/src/services/expenses";
 import { Badge, Button, Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { FileDown } from "lucide-react";
 import { discardExpenseDraftAction } from "./actions";
 import { ExpenseForm } from "./ExpenseForm";
 import { ReceiptBox } from "./ReceiptBox";
@@ -19,7 +20,7 @@ function monthBounds(ym: string) {
 }
 
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
-  const s = await requireSession();
+  const s = await requireMoney();
   const q = await searchParams;
   const today = localDateStr(new Date(), s.timezone);
   const ym = q.month && /^\d{4}-\d{2}$/.test(q.month) ? q.month : today.slice(0, 7);
@@ -44,7 +45,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <PageHeader
         title={`Expenses, ${label}`}
-        actions={<><LinkButton href={`/expenses?month=${prev}`} variant="secondary">Previous</LinkButton><LinkButton href="/expenses" variant="secondary">This month</LinkButton><LinkButton href={`/expenses?month=${next}`} variant="secondary">Next</LinkButton><LinkButton href={`/expenses/tax?year=${year}`} variant="secondary">Tax summary {year}</LinkButton><LinkButton href="/expenses/recurring" variant="secondary">Recurring</LinkButton></>}
+        actions={<><LinkButton href={`/expenses?month=${prev}`} variant="secondary">Previous</LinkButton><LinkButton href="/expenses" variant="secondary">This month</LinkButton><LinkButton href={`/expenses?month=${next}`} variant="secondary">Next</LinkButton><LinkButton href={`/expenses/tax?year=${year}`} variant="secondary">Tax summary {year}</LinkButton><LinkButton href="/expenses/recurring" variant="secondary">Recurring</LinkButton><a href="/api/export?what=expenses" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium shadow-xs hover:bg-surface-2" title="Every expense, all time, as a spreadsheet"><FileDown className="size-4" aria-hidden />CSV</a></>}
       />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Stat label="Spent" value={formatCents(gross)} />

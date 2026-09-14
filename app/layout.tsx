@@ -37,12 +37,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="md:flex">
           <aside className="hidden w-60 shrink-0 border-r border-line bg-surface-2 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
             <div className="px-4 pb-4 pt-4">
-              <Link href="/calendar" className="rounded-lg"><Logo /></Link>
+              <Link href="/" className="rounded-lg"><Logo /></Link>
               <div className="mt-3 truncate rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] font-medium shadow-xs" title={session.organizationName}>
                 {session.organizationName}
               </div>
             </div>
-            <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-3"><SideNav /></div>
+            <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-3"><SideNav role={session.role} /></div>
             <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
               <Avatar name={who} />
               <div className="min-w-0 flex-1 leading-tight">
@@ -58,7 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </aside>
           <div className="min-w-0 flex-1">
             <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-surface/90 px-4 backdrop-blur md:hidden">
-              <Link href="/calendar"><Logo /></Link>
+              <Link href="/"><Logo /></Link>
               <form action={logoutAction}>
                 <button aria-label="Sign out" className="inline-flex size-9 items-center justify-center rounded-lg text-muted hover:bg-surface-3">
                   <LogOut className="size-[18px]" aria-hidden />
@@ -68,7 +68,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <main className="mx-auto max-w-[76rem] px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8">{children}</main>
           </div>
         </div>
-        <BottomNav />
+        <BottomNav role={session.role} />
       </body>
     </html>
   );

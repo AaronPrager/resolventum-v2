@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
-import { CircleCheck, FolderDown, PiggyBank, TrendingUp } from "lucide-react";
+import { requireMoney } from "@/src/auth/current";
+import { CircleCheck, FileDown, FolderDown, PiggyBank, TrendingUp } from "lucide-react";
 import { formatCents } from "@/src/lib/format";
 import { localDateOnly, localDateStr } from "@/src/lib/tz";
 import { accountBalances } from "@/src/services/balances";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
-  const session = await requireSession();
+  const session = await requireMoney();
   const org = { id: session.organizationId, name: session.organizationName };
   const balances = await accountBalances(prisma, org.id, localDateOnly(new Date(), session.timezone));
   const open = balances.filter((b) => b.balanceCents !== 0).sort((a, b) => b.balanceCents - a.balanceCents);
@@ -27,6 +27,9 @@ export default async function AccountsPage() {
         subtitle={<span>{org.name} · {balances.length} accounts, {open.length} with an open balance</span>}
         actions={
           <>
+            <a href="/api/export?what=accounts" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium shadow-xs hover:bg-surface-2" title="Every account with its balance, as a spreadsheet">
+              <FileDown className="size-4" aria-hidden />CSV
+            </a>
             <a href="/api/documents?kind=statement" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium shadow-xs hover:bg-surface-2" title="One PDF per account with a balance or credit">
               <FolderDown className="size-4" aria-hidden />Statements (ZIP)
             </a>

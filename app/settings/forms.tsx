@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
-import { Button, Field, FormError, FormOk, Input, Select, Textarea } from "@/src/components/ui";
-import { type ActionState, changePasswordAction, removeLogoAction, saveAgreementAction, saveTutorAction, updateOrganizationAction, uploadLogoAction } from "./actions";
+import { useActionState, useState } from "react";
+import { Plus, X } from "lucide-react";
+import { Button, Checkbox, Field, FormError, FormOk, Input, Select, Textarea } from "@/src/components/ui";
+import { type ActionState, addHolidayAction, changePasswordAction, removeLogoAction, saveAgreementAction, saveAlertsAction, savePolicyAction, saveTutorAction, updateOrganizationAction, uploadLogoAction } from "./actions";
 import { FileInput } from "@/src/components/FileInput";
 
 export function OrganizationForm({ org, zones, canEdit }: { org: { name: string; timezone: string; legalName: string; address: string; phone: string; replyToEmail: string; venmoHandle: string; zelleHandle: string }; zones: string[]; canEdit: boolean }) {
@@ -25,21 +26,90 @@ export function OrganizationForm({ org, zones, canEdit }: { org: { name: string;
   );
 }
 
-export function TutorForm({ tutor }: { tutor?: { id: string; name: string; email: string; phone: string; color: string; hourlyPayRate: string; notes: string } }) {
+export interface PayRateRow { subject: string; hourly: string; percent: string }
+export interface TutorValues { id: string; name: string; email: string; phone: string; color: string; subjects: string; hourlyClientRate: string; hourlyPayRate: string; payPercent: string; availability: string; timezone: string; notes: string; payRates: PayRateRow[] }
+
+export function TutorForm({ tutor, zones }: { tutor?: TutorValues; zones: string[] }) {
   const [state, action, pending] = useActionState(saveTutorAction, {} as ActionState);
+  const [rates, setRates] = useState<PayRateRow[]>(tutor?.payRates ?? []);
   return (
-    <form action={action} className="space-y-3" data-testid={tutor ? `tutor-form-${tutor.id}` : "tutor-form-new"}>
+    <form action={action} className="space-y-4" data-testid={tutor ? `tutor-form-${tutor.id}` : "tutor-form-new"}>
       {tutor && <input type="hidden" name="tutorId" value={tutor.id} />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
         <Field label="Name" className="col-span-2"><Input name="name" defaultValue={tutor?.name ?? ""} required /></Field>
         <Field label="Email"><Input type="email" name="email" defaultValue={tutor?.email ?? ""} /></Field>
         <Field label="Phone"><Input name="phone" defaultValue={tutor?.phone ?? ""} /></Field>
         <Field label="Calendar color"><Input type="color" name="color" defaultValue={tutor?.color || "#4f46e5"} className="h-9 p-1" /></Field>
+        <Field label="Timezone" hint="If not the school's"><Select name="timezone" defaultValue={tutor?.timezone ?? ""}><option value="">School&apos;s</option>{zones.map((z) => <option key={z} value={z}>{z}</option>)}</Select></Field>
+        <Field label="Subjects" className="col-span-2 sm:col-span-3" hint="Comma separated"><Input name="subjects" defaultValue={tutor?.subjects ?? ""} placeholder="Algebra, SAT Math, Chemistry" /></Field>
+        <Field label="Availability" className="col-span-2 sm:col-span-3"><Input name="availability" defaultValue={tutor?.availability ?? ""} placeholder="Mon to Thu after 4pm, Sat mornings" /></Field>
+        <Field label="Client rate per hour" hint="What families pay"><Input type="text" inputMode="decimal" name="hourlyClientRate" defaultValue={tutor?.hourlyClientRate ?? ""} placeholder="90.00" /></Field>
         <Field label="Pay per hour"><Input type="text" inputMode="decimal" name="hourlyPayRate" defaultValue={tutor?.hourlyPayRate ?? ""} placeholder="45.00" /></Field>
+        <Field label="Or pay percent" hint="Of the lesson price; wins over hourly"><Input type="text" inputMode="numeric" name="payPercent" defaultValue={tutor?.payPercent ?? ""} placeholder="50" /></Field>
         <Field label="Notes" className="col-span-full"><Input name="notes" defaultValue={tutor?.notes ?? ""} /></Field>
       </div>
+      <fieldset className="space-y-2 rounded-lg bg-surface-2 px-3 py-2">
+        <legend className="text-[13px] font-medium text-fg/80">Pay by subject</legend>
+        <p className="text-xs text-muted">A different rule for one subject, matched on the lesson&apos;s subject. Leave empty to pay every subject the same.</p>
+        {rates.map((r, i) => (
+          <div key={i} className="grid grid-cols-[1fr_7rem_5rem_auto] items-center gap-2 sm:max-w-xl">
+            <Input name="rateSubject" aria-label={`Subject ${i + 1}`} value={r.subject} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, subject: e.target.value } : x)))} placeholder="SAT Math" />
+            <Input name="rateHourly" aria-label={`Pay per hour ${i + 1}`} inputMode="decimal" value={r.hourly} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, hourly: e.target.value } : x)))} placeholder="per hour" />
+            <Input name="ratePercent" aria-label={`Percent ${i + 1}`} inputMode="numeric" value={r.percent} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, percent: e.target.value } : x)))} placeholder="%" />
+            <button type="button" onClick={() => setRates((rows) => rows.filter((_, j) => j !== i))} className="inline-flex size-9 items-center justify-center rounded-lg text-faint hover:bg-surface-3 hover:text-fg" aria-label={`Remove rule ${i + 1}`}><X className="size-4" aria-hidden /></button>
+          </div>
+        ))}
+        <Button type="button" variant="ghost" onClick={() => setRates((rows) => [...rows, { subject: "", hourly: "", percent: "" }])}><Plus aria-hidden />Add a subject rule</Button>
+      </fieldset>
       <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
       <Button type="submit" variant={tutor ? "secondary" : "primary"} disabled={pending}>{pending ? "Saving" : tutor ? "Save" : "Add tutor"}</Button>
+    </form>
+  );
+}
+
+export function PolicyForm({ policy, canEdit }: { policy: { lateCancelHours: number; lateCancelChargePercent: number; noShowChargePercent: number; makeupOnLateCancel: boolean }; canEdit: boolean }) {
+  const [state, action, pending] = useActionState(savePolicyAction, {} as ActionState);
+  return (
+    <form action={action} className="space-y-3" data-testid="policy-form">
+      <fieldset disabled={!canEdit} className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Field label="Late means under (hours)" hint="Before the lesson starts"><Input type="number" name="lateCancelHours" min={0} max={168} defaultValue={policy.lateCancelHours} required /></Field>
+        <Field label="Late cancellation charged (%)" hint="0 waives it, 100 charges the whole lesson"><Input type="number" name="lateCancelChargePercent" min={0} max={100} defaultValue={policy.lateCancelChargePercent} required /></Field>
+        <Field label="No-show charged (%)"><Input type="number" name="noShowChargePercent" min={0} max={100} defaultValue={policy.noShowChargePercent} required /></Field>
+        <div className="col-span-full"><Checkbox name="makeupOnLateCancel" defaultChecked={policy.makeupOnLateCancel} label="When a late cancellation is charged, give a make-up credit automatically" /></div>
+      </fieldset>
+      <p className="text-xs text-muted">Applied when a lesson is cancelled or marked no-show. An early cancellation is never charged. Whoever cancels can still override it on the lesson.</p>
+      <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+      {canEdit && <Button type="submit" disabled={pending}>{pending ? "Saving" : "Save policy"}</Button>}
+    </form>
+  );
+}
+
+export function HolidayForm() {
+  const [state, action, pending] = useActionState(addHolidayAction, {} as ActionState);
+  const [key, setKey] = useState(0);
+  return (
+    <form key={key} action={async (fd) => { await action(fd); setKey((k) => k + 1); }} className="space-y-2" data-testid="holiday-form">
+      <div className="grid gap-2 sm:grid-cols-[1fr_10rem_10rem_auto] sm:items-end">
+        <Field label="Name"><Input name="name" placeholder="Winter break" required /></Field>
+        <Field label="From"><Input type="date" name="startsOn" required /></Field>
+        <Field label="To" hint="Same day if empty"><Input type="date" name="endsOn" /></Field>
+        <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Adding" : "Add"}</Button>
+      </div>
+      <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+    </form>
+  );
+}
+
+export function AlertsForm({ lowBalanceAlert, sessionNotesAuto, canEdit }: { lowBalanceAlert: string; sessionNotesAuto: boolean; canEdit: boolean }) {
+  const [state, action, pending] = useActionState(saveAlertsAction, {} as ActionState);
+  return (
+    <form action={action} className="space-y-3" data-testid="alerts-form">
+      <fieldset disabled={!canEdit} className="space-y-3">
+        <Field label="Email me when a family owes at least" className="max-w-xs" hint="Once a day, from the morning job. Empty turns it off."><Input inputMode="decimal" name="lowBalanceAlert" defaultValue={lowBalanceAlert} placeholder="300.00" /></Field>
+        <Checkbox name="sessionNotesAuto" defaultChecked={sessionNotesAuto} label="Every night, email families the session notes written that day that were not sent by hand" />
+      </fieldset>
+      <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+      {canEdit && <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Saving" : "Save"}</Button>}
     </form>
   );
 }

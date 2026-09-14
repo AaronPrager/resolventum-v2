@@ -18,7 +18,7 @@ export interface StudentRow {
 }
 
 /** `today` is a calendar day in the school's zone (see localDateOnly); the database session zone is not trusted. */
-export async function listStudents(prisma: PrismaClient, organizationId: string, today: Date, opts: { includeArchived?: boolean } = {}): Promise<StudentRow[]> {
+export async function listStudents(prisma: PrismaClient, organizationId: string, today: Date, opts: { includeArchived?: boolean; tutorId?: string | null } = {}): Promise<StudentRow[]> {
   const todayStr = today.toISOString().slice(0, 10);
   const rows = await prisma.$queryRaw<
     { id: string; firstName: string; lastName: string; grade: string | null; status: "ACTIVE" | "PAUSED" | "GRADUATED"; archivedAt: Date | null; accountId: string; accountName: string;
@@ -36,6 +36,7 @@ export async function listStudents(prisma: PrismaClient, organizationId: string,
     from "Student" s join "Account" a on a.id = s."accountId"
     where s."organizationId" = ${organizationId} and s."deletedAt" is null
       and (${opts.includeArchived ?? false} or s."archivedAt" is null)
+      and (${opts.tutorId ?? null}::text is null or exists (select 1 from "LessonStudent" x join "Lesson" xl on xl.id = x."lessonId" where x."studentId" = s.id and xl."tutorId" = ${opts.tutorId ?? null}::text and xl."deletedAt" is null))
     order by s."lastName", s."firstName"`;
   return rows.map((r) => ({
     id: r.id,
@@ -95,7 +96,7 @@ export async function archiveStudent(db: PrismaClient, organizationId: string, s
   const seriesIds = new Set<string>();
   for (const seat of seats) {
     if (seat.lesson._count.students > 1) continue; // a group lesson goes on for the others
-    await cancelLesson(db, seat.lesson.id, "Student archived");
+    await cancelLesson(db, seat.lesson.id, "Student archived", { chargeAnyway: false });
     cancelledLessons += 1;
     if (seat.lesson.seriesId) seriesIds.add(seat.lesson.seriesId);
   }

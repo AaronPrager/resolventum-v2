@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { listCategories, listVendors } from "@/src/services/expenses";
 import { Badge, Button, Card, Field, Input, PageHeader } from "@/src/components/ui";
 import { voidExpenseAction } from "../actions";
@@ -9,7 +9,7 @@ import { ExpenseForm } from "../ExpenseForm";
 export const dynamic = "force-dynamic";
 
 export default async function ExpensePage({ params }: { params: Promise<{ id: string }> }) {
-  const s = await requireSession();
+  const s = await requireMoney();
   const { id } = await params;
   const e = await prisma.expense.findFirst({ where: { id, organizationId: s.organizationId }, include: { vendor: true, receipt: { select: { id: true, name: true } } } });
   if (!e) notFound();

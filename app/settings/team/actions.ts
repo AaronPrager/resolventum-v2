@@ -40,6 +40,22 @@ export async function removeMemberAction(fd: FormData): Promise<void> {
   revalidatePath("/settings/team");
 }
 
+/** Tie a tutor-role login to the Tutor row it teaches as, so they see their own lessons and pay. */
+export async function linkTutorAction(fd: FormData): Promise<void> {
+  const s = await requireOwner();
+  const membershipId = String(fd.get("membershipId") ?? "");
+  const tutorId = String(fd.get("tutorId") ?? "");
+  const m = await prisma.membership.findFirst({ where: { id: membershipId, organizationId: s.organizationId } });
+  if (!m) return;
+  if (tutorId) {
+    const t = await prisma.tutor.findFirst({ where: { id: tutorId, organizationId: s.organizationId } });
+    if (!t) return;
+  }
+  await prisma.membership.update({ where: { id: membershipId }, data: { tutorId: tutorId || null } });
+  revalidatePath("/settings/team");
+  revalidatePath("/settings/tutors");
+}
+
 export async function cancelInvitationAction(fd: FormData): Promise<void> {
   const s = await requireOwner();
   await cancelInvitation(prisma, s.organizationId, String(fd.get("invitationId"))).catch((e) => { if (!known(e)) throw e; });

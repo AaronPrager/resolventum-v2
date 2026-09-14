@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { formatCents, formatDate } from "@/src/lib/format";
 import { localDateStr } from "@/src/lib/tz";
 import { accountStatement } from "@/src/services/statement";
@@ -23,7 +23,7 @@ function parseDate(s: string | undefined): Date | null {
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
 
 export default async function AccountPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string; to?: string; all?: string }> }) {
-  const session = await requireSession();
+  const session = await requireMoney();
   const { id } = await params;
   const q = await searchParams;
   const all = q.all === "1";
@@ -135,7 +135,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
 
       <Card title="Family and contacts" className="print:hidden">
         <div id="family" className="space-y-6">
-          <AccountForm accountId={id} name={account.name} notes={account.notes ?? ""} />
+          <AccountForm accountId={id} name={account.name} notes={account.notes ?? ""} emailReminders={account.emailReminders} emailNotes={account.emailNotes} />
           <div>
             <h3 className="mb-2 text-sm font-semibold">Students</h3>
             <ul className="flex flex-wrap gap-2">

@@ -123,7 +123,8 @@ export function LessonForm({ action, students, lessonId, inSeries, tutors, initi
           <Checkbox name="repeat" label="Repeat every" />
           <span className="inline-flex items-center gap-1.5"><Input className="w-16" type="number" name="intervalWeeks" min={1} max={52} defaultValue={1} aria-label="Interval in weeks" /> week(s)</span>
           <label className="inline-flex items-center gap-2">until <Input className="w-auto" type="date" name="until" /></label>
-          <span className="text-xs text-muted">Leave &quot;until&quot; empty to keep going; lessons are made six months ahead.</span>
+          <Checkbox name="skipHolidays" label="Term time only (skip school holidays)" />
+          <span className="text-xs text-muted">Leave &quot;until&quot; empty to keep going; lessons are made six months ahead. Holidays are set in Settings.</span>
         </fieldset>
       )}
       {inSeries && (

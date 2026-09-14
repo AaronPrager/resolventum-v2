@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Button, Checkbox, Field, FormError, FormOk, Input, Textarea } from "@/src/components/ui";
 import { type ActionState, saveGuardianAction, updateAccountAction } from "../actions";
 
-export function AccountForm({ accountId, name, notes }: { accountId: string; name: string; notes: string }) {
+export function AccountForm({ accountId, name, notes, emailReminders, emailNotes }: { accountId: string; name: string; notes: string; emailReminders: boolean; emailNotes: boolean }) {
   const [state, action, pending] = useActionState(updateAccountAction, {} as ActionState);
   return (
     <form action={action} className="space-y-3" data-testid="account-form">
@@ -12,6 +12,10 @@ export function AccountForm({ accountId, name, notes }: { accountId: string; nam
       <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
         <Field label="Account name"><Input name="name" defaultValue={name} required /></Field>
         <Field label="Notes"><Textarea name="notes" rows={1} defaultValue={notes} placeholder="Pays on the 1st, prefers Zelle" /></Field>
+      </div>
+      <div className="flex flex-wrap gap-5 text-sm">
+        <Checkbox name="emailReminders" defaultChecked={emailReminders} label="Email lesson reminders to this family" />
+        <Checkbox name="emailNotes" defaultChecked={emailNotes} label="Email session notes to this family" />
       </div>
       <div className="flex items-center gap-3">
         <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Saving" : "Save"}</Button>

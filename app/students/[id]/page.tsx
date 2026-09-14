@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireSession, tutorScope } from "@/src/auth/current";
+import { sessionNotesForStudent } from "@/src/services/sessionNotes";
 import { formatCents, formatDate, formatWhen, localDateStr } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { studentChoices, studentDetail } from "@/src/services/students";
@@ -23,6 +24,10 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const detail = await studentDetail(prisma, id);
   if (!detail || detail.student.organizationId !== session.organizationId) notFound();
   const { student, tutors } = detail;
+  const scope = tutorScope(session);
+  if (scope && !student.lessons.some((l) => l.lesson.tutorId === scope)) notFound();
+  const notes = await sessionNotesForStudent(prisma, student.id, 12);
+  const noted = new Set(notes.map((n) => n.lesson.id));
   const choices = await studentChoices(prisma, student.organizationId, [student.id]);
   const tz = student.organization.timezone;
   const balances = await accountBalances(prisma, student.organization.id, localDateOnly(new Date(), student.organization.timezone));
@@ -37,7 +42,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<span className="inline-flex items-center gap-3"><Avatar name={`${student.firstName} ${student.lastName}`} className="size-10 text-sm" />{student.firstName} {student.lastName}{student.archivedAt && <Badge>archived</Badge>}</span>}
+        title={<span className="inline-flex items-center gap-3"><Avatar name={`${student.firstName} ${student.lastName}`} className="size-10 text-sm" />{student.firstName} {student.lastName}{student.status !== "ACTIVE" && <Badge tone={student.status === "PAUSED" ? "warn" : "neutral"}>{student.status.toLowerCase()}</Badge>}{student.archivedAt && <Badge>archived</Badge>}</span>}
         back={{ href: "/students", label: "Students" }}
         subtitle={[student.grade && `Grade ${student.grade}`, student.schoolName, student.defaultSubject].filter(Boolean).join(" · ")}
         actions={
@@ -118,8 +123,29 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
         </div>
       </details>
 
-      <LessonTable title={`Upcoming (${upcoming.length})`} rows={showAll ? upcoming : upcoming.slice(0, 8)} hidden={showAll ? 0 : Math.max(0, upcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" />
-      <LessonTable title={`Past (${past.length})`} rows={showAll ? past : past.slice(0, 12)} hidden={showAll ? 0 : Math.max(0, past.length - 12)} tz={tz} studentId={student.id} testId="past" />
+      <LessonTable title={`Upcoming (${upcoming.length})`} rows={showAll ? upcoming : upcoming.slice(0, 8)} hidden={showAll ? 0 : Math.max(0, upcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" noted={noted} />
+      <LessonTable title={`Past (${past.length})`} rows={showAll ? past : past.slice(0, 12)} hidden={showAll ? 0 : Math.max(0, past.length - 12)} tz={tz} studentId={student.id} testId="past" noted={noted} />
+
+      <Card title="Session notes" actions={<span className="text-xs text-muted">Written on the lesson, sent to the family</span>}>
+        {notes.length === 0 ? <p className="text-sm text-muted">No session notes yet. Open a past lesson to write one.</p> : (
+          <ul className="divide-y divide-line" data-testid="session-notes">
+            {notes.map((n) => (
+              <li key={n.id} className="py-2.5 text-sm">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <Link href={`/lessons/${n.lesson.id}#notes`} className="w-40 shrink-0 tabular-nums text-muted hover:text-brand hover:underline">{formatWhen(n.lesson.startsAt, tz)}</Link>
+                  <span className="font-medium">{n.lesson.subject}</span>
+                  {n.engagement && <Badge tone={n.engagement >= 4 ? "credit" : n.engagement <= 2 ? "owed" : "neutral"}>engagement {n.engagement}/5</Badge>}
+                  <span className="text-xs text-muted">{n.sharedAt ? `sent ${formatDate(n.sharedAt)}` : "not sent"}</span>
+                </div>
+                <p className="mt-1">{n.covered}</p>
+                {(n.win || n.struggle || n.nextGoal) && (
+                  <p className="mt-0.5 text-muted">{[n.win && `Win: ${n.win}`, n.struggle && `Struggle: ${n.struggle}`, n.nextGoal && `Next: ${n.nextGoal}`].filter(Boolean).join(" · ")}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card title="Progress notes" actions={<span className="text-xs text-muted">Where you stopped and where to start next</span>}>
         <div className="space-y-4">
@@ -169,7 +195,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
 
 type Seat = NonNullable<Awaited<ReturnType<typeof studentDetail>>>["student"]["lessons"][number];
 
-function LessonTable({ title, rows, hidden, tz, studentId, testId }: { title: string; rows: Seat[]; hidden: number; tz: string; studentId: string; testId: string }) {
+function LessonTable({ title, rows, hidden, tz, studentId, testId, noted }: { title: string; rows: Seat[]; hidden: number; tz: string; studentId: string; testId: string; noted: Set<string> }) {
   return (
     <Card title={title} actions={hidden > 0 ? <Link href={`/students/${studentId}?all=1`} className="text-sm text-brand hover:underline">Show all ({hidden} more)</Link> : undefined}>
       {rows.length === 0 ? <Empty>None.</Empty> : (
@@ -178,16 +204,18 @@ function LessonTable({ title, rows, hidden, tz, studentId, testId }: { title: st
             <thead><tr><Th>When</Th><Th className="hidden sm:table-cell">Subject</Th><Th className="hidden md:table-cell">Tutor</Th><Th right>Price</Th><Th className="hidden sm:table-cell">Status</Th><Th></Th></tr></thead>
             <tbody>
               {rows.map((s) => {
-                const cancelled = s.lesson.status === "CANCELLED";
+                const cancelled = s.lesson.status === "CANCELLED" || s.lesson.status === "NO_SHOW";
+                const needsNote = s.lesson.status === "COMPLETED" && !noted.has(s.lesson.id);
                 return (
                   <tr key={s.id} className={`hover:bg-surface-2 ${cancelled ? "text-muted line-through" : ""}`}>
                     <Td num><Link href={`/lessons/${s.lesson.id}`} className="underline-offset-2 hover:text-brand hover:underline">{formatWhen(s.lesson.startsAt, tz)}</Link><span className="hidden text-muted sm:inline"> · {s.lesson.durationMin} min</span></Td>
                     <Td className="hidden sm:table-cell">{s.lesson.subject}{s.lesson.locationType === "REMOTE" && <span className="ml-1 text-xs text-muted">remote</span>}{s.lesson.seriesId && <span className="ml-1 text-xs text-muted">weekly</span>}</Td>
                     <Td className="hidden md:table-cell">{s.lesson.tutor?.name ?? ""}</Td>
                     <Td right num>{formatCents(s.priceCents)}{s.charge?.voidedAt && <span className="ml-1 text-xs no-underline">not charged</span>}</Td>
-                    <Td className="hidden sm:table-cell"><span className="no-underline"><Badge tone={cancelled ? "owed" : s.lesson.status === "COMPLETED" ? "neutral" : "brand"}>{s.lesson.status.toLowerCase()}</Badge></span></Td>
+                    <Td className="hidden sm:table-cell"><span className="no-underline"><Badge tone={s.lesson.status === "CANCELLED" ? "owed" : s.lesson.status === "NO_SHOW" ? "warn" : s.lesson.status === "COMPLETED" ? "neutral" : "brand"}>{s.lesson.status.toLowerCase().replace("_", " ")}</Badge></span></Td>
                     <Td right>
                       <span className="inline-flex gap-3 no-underline">
+                        {needsNote && <Link href={`/lessons/${s.lesson.id}#notes`} className="text-warn hover:underline">Note</Link>}
                         <Link href={`/lessons/${s.lesson.id}`} className="hidden text-brand hover:underline sm:inline">Edit</Link>
                         {cancelled ? (
                           <form action={restoreLessonAction} className="inline">
@@ -196,7 +224,7 @@ function LessonTable({ title, rows, hidden, tz, studentId, testId }: { title: st
                           </form>
                         ) : (
                           <ConfirmForm action={cancelLessonAction} className="inline" message="Cancel this lesson? The charge is voided and the balance changes. You can restore it later.">
-                            <input type="hidden" name="lessonId" value={s.lesson.id} /><input type="hidden" name="studentId" value={studentId} /><input type="hidden" name="reason" value="Cancelled" />
+                            <input type="hidden" name="lessonId" value={s.lesson.id} /><input type="hidden" name="studentId" value={studentId} /><input type="hidden" name="reason" value="Cancelled" /><input type="hidden" name="chargeMode" value="waive" />
                             <Button variant="link" className="text-owed">Cancel</Button>
                           </ConfirmForm>
                         )}

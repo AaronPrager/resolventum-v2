@@ -31,3 +31,8 @@ export async function listAudit(db: PrismaClient, organizationId: string, opts: 
     take: opts.take ?? 200,
   });
 }
+
+/** Record on behalf of the signed-in person. */
+export function auditAs(db: PrismaClient, s: { organizationId: string; userId: string; name: string; email: string }, e: Omit<AuditInput, "organizationId" | "actorId" | "actorName">) {
+  return recordAudit(db, { organizationId: s.organizationId, actorId: s.userId, actorName: s.name || s.email, ...e });
+}

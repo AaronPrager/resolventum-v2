@@ -10,7 +10,7 @@ import type { PrismaClient } from "../../generated/prisma/client";
 import { dateOnlyFromStr, localDateOnly, localDateStr, localTimeStr, zonedToUtc } from "../lib/tz";
 import { formatRule, parseRule, weeklyOccurrences, weeklyOccurrencesAfter } from "../lib/recurrence";
 import { rebuildAccountAllocations } from "./allocation";
-import { LessonError, type LessonInput, type LessonUpdate, addSeat, cancelLesson, deleteLesson, resolveRoster, updateLesson } from "./lessons";
+import { type CancelOptions, LessonError, type LessonInput, type LessonUpdate, addSeat, cancelLesson, deleteLesson, resolveRoster, updateLesson } from "./lessons";
 import { holidayRanges } from "./holidays";
 
 export const HORIZON_DAYS = 180;
@@ -153,10 +153,10 @@ export async function updateLessonAndFuture(db: PrismaClient, lessonId: string, 
   return lessons.length;
 }
 
-/** Cancel this lesson and every later one in its series, and close the series on this date. */
-export async function cancelLessonAndFuture(db: PrismaClient, lessonId: string, reason: string, timeZone: string) {
+/** Cancel this lesson and every later one in its series, and close the series on this date. The policy (or the override) applies to each lesson on its own. */
+export async function cancelLessonAndFuture(db: PrismaClient, lessonId: string, reason: string, timeZone: string, opts: CancelOptions = {}) {
   const lessons = await futureOfSeries(db, lessonId);
-  for (const l of lessons) await cancelLesson(db, l.id, reason);
+  for (const l of lessons) await cancelLesson(db, l.id, reason, opts);
   const first = lessons[0];
   if (first.seriesId) {
     const dayBefore = new Date(localDateOnly(first.startsAt, timeZone).getTime() - 86400000);

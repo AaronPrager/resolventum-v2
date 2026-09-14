@@ -52,3 +52,15 @@ export async function requireWriter(): Promise<SessionUser> {
   if (s.role === "ACCOUNTANT") throw new RoleError("Your role is read-only. Ask the owner to make changes.");
   return s;
 }
+
+/** The tutor a login is limited to: their own Tutor row when the role is TUTOR, else null (sees everyone). */
+export function tutorScope(s: SessionUser): string | null {
+  return s.role === "TUTOR" ? s.tutorId ?? "none" : null;
+}
+
+/** Money pages: accounts, payments, expenses, reports. A tutor is sent to their own pay page instead. */
+export async function requireMoney(): Promise<SessionUser> {
+  const s = await requireSession();
+  if (s.role === "TUTOR") redirect("/earnings");
+  return s;
+}

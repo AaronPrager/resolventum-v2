@@ -1,5 +1,5 @@
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { formatCents, formatDate } from "@/src/lib/format";
 import { TREATMENT_LABEL, taxSummary } from "@/src/services/expenses";
 import { Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
@@ -10,7 +10,7 @@ import { incomeByKind } from "@/src/services/reports";
 export const dynamic = "force-dynamic";
 
 export default async function TaxPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
-  const s = await requireSession();
+  const s = await requireMoney();
   const q = await searchParams;
   const year = q.year && /^\d{4}$/.test(q.year) ? Number(q.year) : new Date().getFullYear();
   const [sum, ty, filing, income] = await Promise.all([taxSummary(prisma, s.organizationId, year), prisma.taxYear.findUnique({ where: { organizationId_year: { organizationId: s.organizationId, year } } }), taxFilingStatus(prisma, s.organizationId, year), incomeByKind(prisma, s.organizationId, year)]);

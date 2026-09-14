@@ -6,6 +6,7 @@ import { prisma } from "@/src/db";
 import { RoleError, requireWriter } from "@/src/auth/current";
 import { localDateOnly } from "@/src/lib/tz";
 import { archiveStudent, unarchiveStudent } from "@/src/services/students";
+import { auditAs } from "@/src/services/audit";
 import {
   PeopleError, type StudentInput, addProgressNote, createStudent, deleteProgressNote, moveStudent, updateProgressNote, updateStudent,
 } from "@/src/services/people";
@@ -31,6 +32,7 @@ function readStudent(fd: FormData): StudentInput {
     defaultPriceCents: price ? Math.round(Number(price) * 100) : null,
     difficulties: str(fd, "difficulties"),
     notes: str(fd, "notes"),
+    ...(fd.has("status") ? { status: (["ACTIVE", "PAUSED", "GRADUATED"].includes(str(fd, "status")) ? str(fd, "status") : "ACTIVE") as "ACTIVE" | "PAUSED" | "GRADUATED" } : {}),
   };
 }
 function known(e: unknown): string | null {
@@ -61,7 +63,10 @@ export async function updateStudentAction(_p: ActionState, fd: FormData): Promis
   const id = str(fd, "studentId");
   try {
     const session = await requireWriter();
-    await updateStudent(prisma, session.organizationId, id, readStudent(fd));
+    const input = readStudent(fd);
+    const before = await prisma.student.findFirst({ where: { id, organizationId: session.organizationId }, select: { status: true } });
+    const st = await updateStudent(prisma, session.organizationId, id, input);
+    if (before && input.status && before.status !== input.status) await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${before.status.toLowerCase()} to ${input.status.toLowerCase()}` });
   } catch (e) {
     const m = known(e);
     if (m) return { error: m };
@@ -116,7 +121,8 @@ export async function deleteProgressNoteAction(fd: FormData): Promise<void> {
 export async function archiveStudentAction(fd: FormData) {
   const session = await requireWriter();
   const id = String(fd.get("studentId") ?? "");
-  await archiveStudent(prisma, session.organizationId, id);
+  const r = await archiveStudent(prisma, session.organizationId, id);
+  await auditAs(prisma, session, { action: "student.archive", subjectType: "student", subjectId: id, summary: `${r.cancelledLessons} lessons cancelled, ${r.endedSeries} series ended` });
   revalidatePath("/students");
   revalidatePath("/calendar");
   redirect(`/students/${id}`);
@@ -126,6 +132,7 @@ export async function unarchiveStudentAction(fd: FormData) {
   const session = await requireWriter();
   const id = String(fd.get("studentId") ?? "");
   await unarchiveStudent(prisma, session.organizationId, id);
+  await auditAs(prisma, session, { action: "student.unarchive", subjectType: "student", subjectId: id, summary: "Brought back" });
   revalidatePath("/students");
   redirect(`/students/${id}`);
 }

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
-import { requireSession } from "@/src/auth/current";
+import { requireMoney } from "@/src/auth/current";
 import { formatCents, formatDate } from "@/src/lib/format";
 import { dateOnlyFromStr, localDateStr } from "@/src/lib/tz";
 import { listPayments } from "@/src/services/payments";
 import { Badge, Card, Empty, LinkButton, Money, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { FileDown } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ function monthBounds(ym: string) {
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const q = await searchParams;
-  const session = await requireSession();
+  const session = await requireMoney();
   const org = { id: session.organizationId, name: session.organizationName, timezone: session.timezone };
   const ym = q.month && /^\d{4}-\d{2}$/.test(q.month) ? q.month : localDateStr(new Date(), org.timezone).slice(0, 7);
   const { from, to, label, prev, next } = monthBounds(ym);
@@ -38,6 +39,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LinkButton href={`/payments?month=${prev}`} variant="secondary">Previous</LinkButton>
             <LinkButton href="/payments" variant="secondary">This month</LinkButton>
             <LinkButton href={`/payments?month=${next}`} variant="secondary">Next</LinkButton>
+            <a href="/api/export?what=payments" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium shadow-xs hover:bg-surface-2" title="Every payment, all time, as a spreadsheet"><FileDown className="size-4" aria-hidden />CSV</a>
           </>
         }
       />
