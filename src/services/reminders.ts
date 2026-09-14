@@ -9,6 +9,7 @@ import { formatCents, formatTime } from "../lib/format";
 import { localDateStr, zonedToUtc } from "../lib/tz";
 import { accountBalances } from "./balances";
 import { accountDocument } from "../documents/accountDocs";
+import { shareUnsharedNotes } from "./sessionNotes";
 
 const longDay = (day: string) =>
   new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
@@ -42,6 +43,8 @@ export interface LessonReminder {
   lessons: ReminderLesson[];
   /** Lessons in this group that already had a reminder. They are skipped on send. */
   alreadySent: number;
+  /** The family's preference. The nightly job honours it; a person sending by hand sees it. */
+  emailReminders: boolean;
   subject: string;
   text: string;
 }
@@ -70,7 +73,7 @@ export async function lessonReminders(db: PrismaClient, organizationId: string, 
       if (s.archivedAt || s.deletedAt) continue;
       const g = groups.get(s.accountId) ?? (() => {
         const contact = familyEmail(s.account.guardians);
-        const r: LessonReminder = { accountId: s.accountId, accountName: s.account.name, to: contact?.email ?? s.email ?? null, toName: contact?.name ?? (s.email ? s.firstName : null), lessons: [], alreadySent: 0, subject: "", text: "" };
+        const r: LessonReminder = { accountId: s.accountId, accountName: s.account.name, to: contact?.email ?? s.email ?? null, toName: contact?.name ?? (s.email ? s.firstName : null), lessons: [], alreadySent: 0, emailReminders: s.account.emailReminders, subject: "", text: "" };
         groups.set(s.accountId, r);
         return r;
       })();
@@ -116,8 +119,8 @@ function reminderText(o: OrgInfo, day: string, r: LessonReminder) {
   return { subject, text };
 }
 
-/** Send reminders for a day. Pass accountIds to send only some. Returns counts. */
-export async function sendLessonReminders(db: PrismaClient, organizationId: string, day: string, opts: { accountIds?: string[] } = {}) {
+/** Send reminders for a day. Pass accountIds to send only some; honorPreferences skips families who turned reminders off. Returns counts. */
+export async function sendLessonReminders(db: PrismaClient, organizationId: string, day: string, opts: { accountIds?: string[]; honorPreferences?: boolean } = {}) {
   const o = await org(db, organizationId);
   const all = await lessonReminders(db, organizationId, day);
   let sent = 0, skipped = 0, failed = 0;
@@ -125,7 +128,7 @@ export async function sendLessonReminders(db: PrismaClient, organizationId: stri
   for (const r of all) {
     if (opts.accountIds && !opts.accountIds.includes(r.accountId)) continue;
     const fresh = r.lessons.length - r.alreadySent;
-    if (!r.to || fresh === 0) { skipped++; continue; }
+    if (!r.to || fresh === 0 || (opts.honorPreferences && !r.emailReminders)) { skipped++; continue; }
     try {
       // Log against every lesson in the email so none is reminded twice.
       const id = await sendEmail(db, organizationId, "LESSON_REMINDER", { to: r.to, subject: r.subject, text: r.text, replyTo: o.replyToEmail }, { type: "lesson", id: r.lessons[0].lessonId });
@@ -183,6 +186,7 @@ export interface BalanceReminder {
   to: string | null;
   toName: string | null;
   lastReminderAt: Date | null;
+  emailReminders: boolean;
   subject: string;
   text: string;
 }
@@ -207,6 +211,7 @@ export async function balanceReminders(db: PrismaClient, organizationId: string,
         to,
         toName: contact?.name ?? null,
         lastReminderAt: lastBy.get(b.accountId) ?? null,
+        emailReminders: a.emailReminders,
         subject: `${o.name}: balance of ${formatCents(b.balanceCents)} for ${b.name}`,
         text: [
           `Hello${first ? ` ${first}` : ""},`,
@@ -247,14 +252,61 @@ export async function sendBalanceReminders(db: PrismaClient, organizationId: str
   return { sent, skipped, failed, errors };
 }
 
+// ---------------------------------------------------------------- low balance alert
+
+/** Families owing at or over the school's threshold, as of a day. Empty when the alert is off. */
+export async function lowBalanceList(db: PrismaClient, organizationId: string, today: Date) {
+  const o = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { lowBalanceAlertCents: true } });
+  if (!o.lowBalanceAlertCents) return { thresholdCents: null, accounts: [] as { accountId: string; name: string; balanceCents: number }[] };
+  const t = o.lowBalanceAlertCents;
+  const accounts = (await accountBalances(db, organizationId, today)).filter((b) => b.balanceCents >= t).map((b) => ({ accountId: b.accountId, name: b.name, balanceCents: b.balanceCents })).sort((a, b) => b.balanceCents - a.balanceCents);
+  return { thresholdCents: t, accounts };
+}
+
+/** One email a day to the owner listing families over the threshold. */
+export async function sendLowBalanceAlert(db: PrismaClient, organizationId: string, today: Date): Promise<{ sent: boolean; reason?: string; count: number }> {
+  const { thresholdCents, accounts } = await lowBalanceList(db, organizationId, today);
+  if (!thresholdCents) return { sent: false, reason: "off", count: 0 };
+  if (accounts.length === 0) return { sent: false, reason: "nobody over the threshold", count: 0 };
+  const day = today.toISOString().slice(0, 10);
+  const o = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, include: { memberships: { where: { role: "OWNER" }, include: { user: { select: { email: true } } }, orderBy: { createdAt: "asc" }, take: 1 } } });
+  const to = o.replyToEmail ?? o.memberships[0]?.user.email;
+  if (!to) return { sent: false, reason: "no owner email", count: accounts.length };
+  const already = await db.message.findFirst({ where: { organizationId, kind: "LOW_BALANCE_ALERT", status: "SENT", relatedType: "day", relatedId: day } });
+  if (already) return { sent: false, reason: "already sent today", count: accounts.length };
+  const text = [
+    `${accounts.length} famil${accounts.length === 1 ? "y owes" : "ies owe"} ${formatCents(thresholdCents)} or more as of ${day}:`,
+    "",
+    ...accounts.map((a) => `${a.name}: ${formatCents(a.balanceCents)}`),
+    "",
+    "Balance reminders can go out from the Emails page.",
+  ].join("\n");
+  await sendEmail(db, organizationId, "LOW_BALANCE_ALERT", { to, subject: `${o.name}: ${accounts.length} famil${accounts.length === 1 ? "y" : "ies"} over ${formatCents(thresholdCents)}`, text }, { type: "day", id: day });
+  return { sent: true, count: accounts.length };
+}
+
 // ---------------------------------------------------------------- nightly
 
 /** What the nightly job does for one school, per its settings. */
 export async function nightlyEmails(db: PrismaClient, organizationId: string, now = new Date()) {
   const o = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, include: { memberships: { where: { role: "OWNER" }, include: { user: { select: { email: true } } }, orderBy: { createdAt: "asc" }, take: 1 } } });
   const today = localDateStr(now, o.timezone);
-  const result: { reminders?: Awaited<ReturnType<typeof sendLessonReminders>>; schedule?: { sent: boolean; reason?: string } } = {};
-  if (o.lessonRemindersAuto) result.reminders = await sendLessonReminders(db, organizationId, addDays(today, 1));
+  const result: {
+    reminders?: Awaited<ReturnType<typeof sendLessonReminders>>;
+    schedule?: { sent: boolean; reason?: string };
+    notes?: Awaited<ReturnType<typeof shareUnsharedNotes>>;
+    lowBalance?: Awaited<ReturnType<typeof sendLowBalanceAlert>>;
+  } = {};
+  if (o.lessonRemindersAuto) result.reminders = await sendLessonReminders(db, organizationId, addDays(today, 1), { honorPreferences: true });
+  if (o.sessionNotesAuto) result.notes = await shareUnsharedNotes(db, organizationId, today);
+  if (o.lowBalanceAlertCents) {
+    try {
+      result.lowBalance = await sendLowBalanceAlert(db, organizationId, new Date(`${today}T00:00:00Z`));
+    } catch (e) {
+      if (!(e instanceof EmailError)) throw e;
+      result.lowBalance = { sent: false, reason: e.message, count: 0 };
+    }
+  }
   if (o.dailyScheduleAuto) {
     const to = o.dailyScheduleEmail ?? o.memberships[0]?.user.email;
     if (to) {

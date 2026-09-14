@@ -6,6 +6,7 @@
 import type { PrismaClient } from "../../generated/prisma/client";
 import { dateOnlyFromStr } from "../lib/tz";
 import { type TaxTreatment, deductibleCents } from "./expenses";
+import { payForLesson, payRuleFor } from "./payroll";
 
 export interface MonthRow {
   month: string; // YYYY-MM
@@ -112,20 +113,28 @@ export interface TutorPayRow {
   payCents: number | null;
 }
 
-/** Lessons taught per tutor in a date range, with pay when a rate is set. */
+/** Lessons taught per tutor in a date range, with pay under each tutor's rules. */
 export async function tutorPay(db: PrismaClient, organizationId: string, from: Date, to: Date): Promise<TutorPayRow[]> {
-  const rows = await db.$queryRaw<{ id: string; name: string; rate: number | null; lessons: bigint; minutes: bigint; charged: bigint }[]>`
-    select t.id, t.name, t."hourlyPayRateCents" rate, count(distinct l.id)::bigint lessons,
-      coalesce(sum(l."durationMin"), 0)::bigint minutes, coalesce(sum(ls."priceCents"), 0)::bigint charged
-    from "Tutor" t
-    left join "Lesson" l on l."tutorId" = t.id and l."deletedAt" is null and l.status <> 'CANCELLED' and l."startsAt" >= ${from} and l."startsAt" < ${to}
-    left join "LessonStudent" ls on ls."lessonId" = l.id
-    where t."organizationId" = ${organizationId}
-    group by t.id, t.name, t."hourlyPayRateCents" order by t.name`;
-  return rows.map((r) => ({
-    tutorId: r.id, tutorName: r.name, hourlyPayRateCents: r.rate, lessons: Number(r.lessons), minutes: Number(r.minutes), chargedCents: Number(r.charged),
-    payCents: r.rate == null ? null : Math.round((Number(r.minutes) / 60) * r.rate),
-  }));
+  const [tutors, lessons] = await Promise.all([
+    db.tutor.findMany({ where: { organizationId }, include: { payRates: true }, orderBy: { name: "asc" } }),
+    db.lesson.findMany({
+      where: { organizationId, tutorId: { not: null }, deletedAt: null, status: { not: "CANCELLED" }, startsAt: { gte: from, lt: to } },
+      select: { tutorId: true, durationMin: true, subject: true, students: { select: { priceCents: true } } },
+    }),
+  ]);
+  return tutors.map((t) => {
+    const mine = lessons.filter((l) => l.tutorId === t.id);
+    let minutes = 0, charged = 0, pay = 0, priced = 0;
+    for (const l of mine) {
+      const c = l.students.reduce((s, x) => s + x.priceCents, 0);
+      minutes += l.durationMin;
+      charged += c;
+      const p = payForLesson(payRuleFor(t, l.subject), l.durationMin, c);
+      if (p != null) { pay += p; priced++; }
+    }
+    const hasRule = t.hourlyPayRateCents != null || t.payPercent != null || t.payRates.some((r) => r.hourlyPayRateCents != null || r.payPercent != null);
+    return { tutorId: t.id, tutorName: t.name, hourlyPayRateCents: t.hourlyPayRateCents, lessons: mine.length, minutes, chargedCents: charged, payCents: !hasRule || (mine.length > 0 && priced === 0) ? null : pay };
+  });
 }
 
 export interface StudentYearRow {

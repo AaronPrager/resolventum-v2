@@ -7,6 +7,7 @@ export interface StudentRow {
   id: string;
   name: string;
   grade: string | null;
+  status: "ACTIVE" | "PAUSED" | "GRADUATED";
   archived: boolean;
   accountId: string;
   accountName: string;
@@ -20,10 +21,10 @@ export interface StudentRow {
 export async function listStudents(prisma: PrismaClient, organizationId: string, today: Date, opts: { includeArchived?: boolean } = {}): Promise<StudentRow[]> {
   const todayStr = today.toISOString().slice(0, 10);
   const rows = await prisma.$queryRaw<
-    { id: string; firstName: string; lastName: string; grade: string | null; archivedAt: Date | null; accountId: string; accountName: string;
+    { id: string; firstName: string; lastName: string; grade: string | null; status: "ACTIVE" | "PAUSED" | "GRADUATED"; archivedAt: Date | null; accountId: string; accountName: string;
       balance: bigint; lastLessonAt: Date | null; nextLessonAt: Date | null; lessonCount: bigint }[]
   >`
-    select s.id, s."firstName", s."lastName", s.grade, s."archivedAt", s."accountId", a.name as "accountName",
+    select s.id, s."firstName", s."lastName", s.grade, s.status::text as status, s."archivedAt", s."accountId", a.name as "accountName",
       coalesce((select sum(c."amountCents") from "Charge" c where c."accountId" = a.id and c."voidedAt" is null and c."chargedOn" <= ${todayStr}::date), 0)::bigint
       - coalesce((select sum(p."amountCents") from "Payment" p where p."accountId" = a.id and p."voidedAt" is null and p."paidOn" <= ${todayStr}::date), 0)::bigint as balance,
       (select max(l."startsAt") from "LessonStudent" ls join "Lesson" l on l.id = ls."lessonId"
@@ -40,6 +41,7 @@ export async function listStudents(prisma: PrismaClient, organizationId: string,
     id: r.id,
     name: `${r.firstName} ${r.lastName}`,
     grade: r.grade,
+    status: r.status,
     archived: r.archivedAt !== null,
     accountId: r.accountId,
     accountName: r.accountName,

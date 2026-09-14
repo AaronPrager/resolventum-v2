@@ -67,7 +67,7 @@ export async function tutorSlip(db: PrismaClient, organizationId: string, tutorI
   const lines: [string, string][] = [
     ["Lessons", String(m.lessons.length)],
     ["Hours", hours.toFixed(2)],
-    ["Rate per hour", m.rateCents == null ? "not set" : formatCents(m.rateCents)],
+    ["Pay rate", m.rateLabel],
   ];
   for (const [k, v] of lines) {
     w.text(k, tx, y, { size: 9.5, color: MUTED });

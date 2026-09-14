@@ -80,38 +80,51 @@ model Membership {
 }
 
 model Organization {
-  id                     String    @id @default(uuid())
-  name                   String
-  slug                   String    @unique
-  timezone               String    @default("America/New_York")
-  currency               String    @default("USD")
+  id                      String    @id @default(uuid())
+  name                    String
+  slug                    String    @unique
+  timezone                String    @default("America/New_York")
+  currency                String    @default("USD")
   // Business profile (v1 kept these on User).
-  legalName              String?
-  address                String?
-  phone                  String?
+  legalName               String?
+  address                 String?
+  phone                   String?
   /// Reply-to for mail sent to families. v1 User.academicEmail.
-  replyToEmail           String?
-  venmoHandle            String?
-  zelleHandle            String?
-  logoFileId             String?   @unique
-  logo                   File?     @relation("OrgLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
-  onboardingCompletedAt  DateTime?
-  studentIntakeEnabled   Boolean   @default(false)
+  replyToEmail            String?
+  venmoHandle             String?
+  zelleHandle             String?
+  logoFileId              String?   @unique
+  logo                    File?     @relation("OrgLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  onboardingCompletedAt   DateTime?
+  studentIntakeEnabled    Boolean   @default(false)
   /// The code in the public family sign-up link (/join/CODE). Plain, like a booking link; regenerate to change it.
-  intakeCode             String?   @unique
+  intakeCode              String?   @unique
   /// Filled into the tutoring agreement. Placeholders like {{STUDENT_NAME}}.
-  agreementTemplate      String?
+  agreementTemplate       String?
   /// Nightly job emails families about tomorrow's lessons.
-  lessonRemindersAuto    Boolean   @default(false)
+  lessonRemindersAuto     Boolean   @default(false)
   /// Nightly job emails the day's schedule to dailyScheduleEmail (or the owner).
-  dailyScheduleAuto      Boolean   @default(false)
-  dailyScheduleEmail     String?
+  dailyScheduleAuto       Boolean   @default(false)
+  dailyScheduleEmail      String?
+  // Cancellation policy, applied when a lesson is cancelled or marked no-show.
+  /// A cancellation this close to the start (in hours) counts as late.
+  lateCancelHours         Int       @default(24)
+  /// How much of the price a late cancellation is charged, 0 to 100.
+  lateCancelChargePercent Int       @default(100)
+  /// How much of the price a no-show is charged, 0 to 100.
+  noShowChargePercent     Int       @default(100)
+  /// Give a make-up credit automatically when a late cancellation is charged.
+  makeupOnLateCancel      Boolean   @default(false)
+  /// Nightly job emails families the session notes written that day and not yet shared.
+  sessionNotesAuto        Boolean   @default(false)
+  /// Email the owner when a family owes more than this. Null = off.
+  lowBalanceAlertCents    Int?
   // Product billing. Unused until Stripe lands.
-  plan                   String    @default("free")
-  stripeCustomerId       String?   @unique
-  stripeConnectAccountId String?   @unique
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  plan                    String    @default("free")
+  stripeCustomerId        String?   @unique
+  stripeConnectAccountId  String?   @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   memberships       Membership[]
   invitations       Invitation[]
@@ -133,6 +146,23 @@ model Organization {
   expenses          Expense[]
   taxYears          TaxYear[]
   drafts            Draft[]
+  holidays          Holiday[]
+  sessionNotes      SessionNote[]
+  leads             Lead[]
+  auditEvents       AuditEvent[]
+}
+
+/// A school break. Series with skipHolidays on make no lessons inside it.
+model Holiday {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  startsOn       DateTime     @db.Date
+  endsOn         DateTime     @db.Date
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, startsOn])
 }
 
 enum TokenKind {
@@ -185,26 +215,52 @@ model Waitlist {
 
 /// Staff who teach. Not a login unless a Membership points here.
 model Tutor {
-  id                 String       @id @default(uuid())
-  organizationId     String
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name               String
-  email              String?
-  phone              String?
-  photoFileId        String?      @unique
-  photo              File?        @relation("TutorPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
-  color              String?
-  hourlyPayRateCents Int?
-  notes              String?
-  archivedAt         DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id                    String       @id @default(uuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                  String
+  email                 String?
+  phone                 String?
+  photoFileId           String?      @unique
+  photo                 File?        @relation("TutorPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  color                 String?
+  /// What they teach, for the picker and the profile.
+  subjects              String[]     @default([])
+  /// What families are charged per hour for this tutor, when the school prices by tutor.
+  hourlyClientRateCents Int?
+  /// Default pay: per hour taught...
+  hourlyPayRateCents    Int?
+  /// ...or this percent of what the lesson charged. Set one; percent wins when both are set.
+  payPercent            Int?
+  /// Free text: "Mon-Thu after 4pm, Sat mornings".
+  availability          String?
+  /// IANA zone when the tutor is not in the school's zone. Null = the school's.
+  timezone              String?
+  notes                 String?
+  archivedAt            DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   membership Membership?
   lessons    Lesson[]
   expenses   Expense[]
+  payRates   TutorPayRate[]
 
   @@index([organizationId, archivedAt])
+}
+
+/// Pay for one subject that differs from the tutor's default. Matched on the lesson's subject, case-insensitive.
+model TutorPayRate {
+  id                 String   @id @default(uuid())
+  tutorId            String
+  tutor              Tutor    @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+  subject            String
+  hourlyPayRateCents Int?
+  payPercent         Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([tutorId, subject])
 }
 
 /// Billing unit. A family, or a single independent student.
@@ -214,6 +270,9 @@ model Account {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   notes          String?
+  /// Per-family email preferences. Off means the nightly job and the send-all buttons skip them.
+  emailReminders Boolean      @default(true)
+  emailNotes     Boolean      @default(true)
   archivedAt     DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -247,19 +306,27 @@ model Guardian {
   @@index([accountId])
 }
 
+enum StudentStatus {
+  ACTIVE
+  /// Taking a break; kept in the pickers, left out of active counts.
+  PAUSED
+  /// Finished; kept for history.
+  GRADUATED
+}
+
 model Student {
-  id                String       @id @default(uuid())
+  id                String        @id @default(uuid())
   organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   accountId         String
-  account           Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  account           Account       @relation(fields: [accountId], references: [id], onDelete: Restrict)
   firstName         String
   lastName          String
   email             String?
   phone             String?
-  dateOfBirth       DateTime?    @db.Date
-  photoFileId       String?      @unique
-  photo             File?        @relation("StudentPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  dateOfBirth       DateTime?     @db.Date
+  photoFileId       String?       @unique
+  photo             File?         @relation("StudentPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
   schoolName        String?
   grade             String?
   defaultSubject    String?
@@ -270,14 +337,17 @@ model Student {
   lastStopNote      String?
   /// v1 StudentProgress.nextLessonStart
   nextStartNote     String?
+  status            StudentStatus @default(ACTIVE)
+  /// Archived = dormant: out of the pickers and the default list. Independent of status.
   archivedAt        DateTime?
   deletedAt         DateTime?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   membership    Membership?
   lessons       LessonStudent[]
   progressNotes ProgressNote[]
+  sessionNotes  SessionNote[]
   charges       Charge[]
   assignments   Assignment[]
   masteries     Mastery[]
@@ -315,6 +385,8 @@ model LessonSeries {
   rrule          String
   startsAt       DateTime
   endsOn         DateTime?    @db.Date
+  /// Term-time only: no lessons on the school's holidays.
+  skipHolidays   Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -353,6 +425,8 @@ model Lesson {
   files         LessonFile[]
   assignments   Assignment[]
   progressNotes ProgressNote[]
+  sessionNotes  SessionNote[]
+  makeupCredits Charge[]        @relation("MakeupSource")
 
   @@index([organizationId, startsAt])
   @@index([tutorId, startsAt])
@@ -393,6 +467,35 @@ model ProgressNote {
 
   @@index([studentId, notedOn])
   @@index([lessonId])
+}
+
+/// The structured note a tutor writes after a lesson, one per student on it.
+/// Five things a parent wants to know, and what the next lesson is for.
+model SessionNote {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lessonId       String
+  lesson         Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  covered        String
+  homework       String?
+  /// 1 (checked out) to 5 (fully engaged).
+  engagement     Int?
+  win            String?
+  struggle       String?
+  nextGoal       String?
+  /// When it went to the family, and to whom.
+  sharedAt       DateTime?
+  sharedTo       String?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([lessonId, studentId])
+  @@index([studentId, createdAt])
+  @@index([organizationId, sharedAt])
 }
 
 enum LessonFileKind {
@@ -439,6 +542,9 @@ model Charge {
   amountCents     Int
   chargedOn       DateTime       @db.Date
   description     String
+  /// A make-up credit points at the cancelled or missed lesson it makes up for.
+  sourceLessonId  String?
+  sourceLesson    Lesson?        @relation("MakeupSource", fields: [sourceLessonId], references: [id], onDelete: SetNull)
   voidedAt        DateTime?
   voidReason      String?
   createdAt       DateTime       @default(now())
@@ -449,6 +555,7 @@ model Charge {
   @@index([accountId, chargedOn])
   @@index([studentId, chargedOn])
   @@index([organizationId, chargedOn])
+  @@index([sourceLessonId])
 }
 
 enum PaymentKind {
@@ -673,6 +780,8 @@ enum MessageKind {
   BALANCE_REMINDER
   STATEMENT
   INTAKE_CONFIRMATION
+  SESSION_NOTE
+  LOW_BALANCE_ALERT
   OTHER
 }
 
@@ -863,6 +972,69 @@ model TaxYear {
   updatedAt             DateTime     @updatedAt
 
   @@unique([organizationId, year])
+}
+
+// ---------------------------------------------------------------- intake and growth
+
+enum LeadStatus {
+  INQUIRY
+  CONSULT_BOOKED
+  TRIAL
+  ENROLLED
+  LOST
+}
+
+/// A family that asked about lessons. Enrolling makes the student and the account.
+model Lead {
+  id               String       @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status           LeadStatus   @default(INQUIRY)
+  studentFirstName String
+  studentLastName  String
+  grade            String?
+  schoolName       String?
+  studentEmail     String?
+  studentPhone     String?
+  parentName       String
+  parentEmail      String?
+  parentPhone      String?
+  subjects         String?
+  goals            String?
+  /// "form", "referral", "google", or whatever the owner types.
+  source           String?
+  notes            String?
+  /// The consult or trial lesson, once booked.
+  consultAt        DateTime?
+  lostReason       String?
+  /// Set when enrolled.
+  studentId        String?
+  createdById      String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([organizationId, status, createdAt])
+}
+
+// ---------------------------------------------------------------- audit
+
+/// Who did what to money and credit, readable by the owner. Appended, never edited.
+model AuditEvent {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorId        String?
+  actorName      String?
+  /// "lesson.cancel", "payment.record", "charge.void", ...
+  action         String
+  /// "lesson", "payment", "charge", "account", "student"
+  subjectType    String
+  subjectId      String
+  summary        String
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([subjectType, subjectId])
 }
 
 // ---------------------------------------------------------------- AI drafts

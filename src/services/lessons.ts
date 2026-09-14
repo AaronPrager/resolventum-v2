@@ -3,12 +3,13 @@
  *
  * A lesson has a roster: zero students (an event), one (a solo lesson), or
  * several (a group). Each student on it has a seat with their own price and a
- * charge on their family account. Cancelling voids the charges; taking a
- * student off a group voids theirs; nothing with money in it is deleted.
+ * charge on their family account. Cancelling voids or reduces the charge per
+ * the school's cancellation policy; taking a student off a group voids theirs;
+ * nothing with money in it is deleted.
  * Every change rebuilds the allocations of each account it touches.
  */
 import type { PrismaClient } from "../../generated/prisma/client";
-import { localDateOnly } from "../lib/tz";
+import { localDateOnly, localDateStr } from "../lib/tz";
 import { rebuildAccountAllocations } from "./allocation";
 
 export type Db = PrismaClient;
@@ -246,30 +247,135 @@ export async function updateLesson(db: Db, lessonId: string, patch: LessonUpdate
   for (const accountId of accounts) await rebuildAccountAllocations(db, accountId);
 }
 
-/** Cancel a lesson: status CANCELLED, charge voided. Pass chargeAnyway to keep the charge (a late-cancel fee). */
-/** `reason` is optional; a blank one is stored as "Cancelled". */
-export async function cancelLesson(db: Db, lessonId: string, reasonIn = "", opts: { chargeAnyway?: boolean } = {}) {
+// ---------------------------------------------------------------- cancellation policy
+
+export interface CancellationPolicy {
+  lateCancelHours: number;
+  lateCancelChargePercent: number;
+  noShowChargePercent: number;
+  makeupOnLateCancel: boolean;
+}
+
+/** What the school's policy says about a cancellation made `now` for a lesson at `startsAt`. */
+export function cancellationOutcome(policy: CancellationPolicy, startsAt: Date, now = new Date()) {
+  const hoursAhead = (startsAt.getTime() - now.getTime()) / 3600_000;
+  const late = hoursAhead < policy.lateCancelHours;
+  return { late, hoursAhead, chargePercent: late ? policy.lateCancelChargePercent : 0 };
+}
+
+async function policyOf(db: Db, organizationId: string): Promise<CancellationPolicy> {
+  const o = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { lateCancelHours: true, lateCancelChargePercent: true, noShowChargePercent: true, makeupOnLateCancel: true } });
+  return o;
+}
+
+/** Apply a percentage to every live seat charge: 0 voids it, 100 keeps it, anything between reduces it and says so. */
+async function applyChargePercent(tx: Tx, seats: { priceCents: number; charge: { id: string; voidedAt: Date | null; description: string } | null }[], percent: number, reason: string, subject: string, durationMin: number, groupSize: number) {
+  for (const seat of seats) {
+    if (!seat.charge || seat.charge.voidedAt) continue;
+    if (percent <= 0) {
+      await tx.charge.update({ where: { id: seat.charge.id }, data: { voidedAt: new Date(), voidReason: reason } });
+    } else {
+      const amountCents = Math.round((seat.priceCents * Math.min(percent, 100)) / 100);
+      const base = chargeDescription(subject, durationMin, groupSize);
+      await tx.charge.update({ where: { id: seat.charge.id }, data: { amountCents, description: percent < 100 ? `${base} (${reason}, ${percent}%)` : `${base} (${reason})` } });
+    }
+  }
+}
+
+export interface CancelOptions {
+  /** true keeps the full charge, false voids it. Leave unset to let the school's policy decide by how late the cancellation is. */
+  chargeAnyway?: boolean;
+  /** Override the policy's percentage outright. */
+  chargePercent?: number;
+  now?: Date;
+}
+
+/**
+ * Cancel a lesson. The charge follows the cancellation policy: an early
+ * cancellation releases it, a late one is charged the policy's percentage, and
+ * a make-up credit is issued when the policy says so. Both can be overridden.
+ * Returns what was applied so the caller can say it.
+ */
+export async function cancelLesson(db: Db, lessonId: string, reasonIn = "", opts: CancelOptions = {}) {
   const reason = reasonIn.trim() || "Cancelled";
+  const now = opts.now ?? new Date();
   const lesson = await db.lesson.findUnique({
     where: { id: lessonId },
     include: { students: { include: { charge: true, student: { select: { accountId: true } } } } },
   });
   if (!lesson || lesson.deletedAt) throw new LessonError("Lesson not found");
 
+  const policy = await policyOf(db, lesson.organizationId);
+  const outcome = cancellationOutcome(policy, lesson.startsAt, now);
+  const percent = opts.chargePercent !== undefined ? opts.chargePercent : opts.chargeAnyway === true ? 100 : opts.chargeAnyway === false ? 0 : outcome.chargePercent;
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new LessonError("Charge percent must be 0 to 100");
+  const label = opts.chargeAnyway === undefined && opts.chargePercent === undefined && outcome.late ? "late cancellation" : reason;
+
   await db.$transaction(async (tx) => {
     await tx.lesson.update({ where: { id: lessonId }, data: { status: "CANCELLED" } });
     await tx.lessonStudent.updateMany({ where: { lessonId }, data: { status: "CANCELLED" } });
-    if (!opts.chargeAnyway) {
-      for (const seat of lesson.students) {
-        if (seat.charge && !seat.charge.voidedAt) {
-          await tx.charge.update({ where: { id: seat.charge.id }, data: { voidedAt: new Date(), voidReason: reason.trim() } });
-        }
-      }
-    }
+    await applyChargePercent(tx, lesson.students, percent, percent > 0 ? label : reason, lesson.subject, lesson.durationMin, lesson.students.length);
   });
   for (const accountId of new Set(lesson.students.map((s) => s.student.accountId))) {
     await rebuildAccountAllocations(db, accountId);
   }
+  const makeup = percent > 0 && opts.chargePercent === undefined && opts.chargeAnyway === undefined && outcome.late && policy.makeupOnLateCancel
+    ? await issueMakeupCredit(db, lessonId, { reason: "Late cancellation" })
+    : 0;
+  return { late: outcome.late, chargePercent: percent, makeupCredits: makeup };
+}
+
+/** The student did not turn up. Status NO_SHOW; the charge follows the no-show policy (or `chargePercent`). */
+export async function markNoShow(db: Db, lessonId: string, opts: { chargePercent?: number } = {}) {
+  const lesson = await db.lesson.findUnique({
+    where: { id: lessonId },
+    include: { students: { include: { charge: true, student: { select: { accountId: true } } } } },
+  });
+  if (!lesson || lesson.deletedAt) throw new LessonError("Lesson not found");
+  if (lesson.students.length === 0) throw new LessonError("An event with no student cannot be a no-show");
+  if (lesson.status === "CANCELLED") throw new LessonError("The lesson is cancelled; restore it first");
+  const policy = await policyOf(db, lesson.organizationId);
+  const percent = opts.chargePercent ?? policy.noShowChargePercent;
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) throw new LessonError("Charge percent must be 0 to 100");
+  await db.$transaction(async (tx) => {
+    await tx.lesson.update({ where: { id: lessonId }, data: { status: "NO_SHOW" } });
+    await tx.lessonStudent.updateMany({ where: { lessonId }, data: { status: "NO_SHOW" } });
+    await applyChargePercent(tx, lesson.students, percent, "no-show", lesson.subject, lesson.durationMin, lesson.students.length);
+  });
+  for (const accountId of new Set(lesson.students.map((s) => s.student.accountId))) {
+    await rebuildAccountAllocations(db, accountId);
+  }
+  return { chargePercent: percent };
+}
+
+/**
+ * A make-up credit: a negative adjustment on the family account for what a
+ * cancelled or missed lesson was charged, pointing back at that lesson. One
+ * per student per lesson. Returns how many were made.
+ */
+export async function issueMakeupCredit(db: Db, lessonId: string, opts: { reason?: string } = {}) {
+  const lesson = await db.lesson.findUnique({
+    where: { id: lessonId },
+    include: { organization: { select: { timezone: true } }, students: { include: { charge: true, student: { select: { id: true, accountId: true } } } }, makeupCredits: { where: { voidedAt: null }, select: { studentId: true } } },
+  });
+  if (!lesson || lesson.deletedAt) throw new LessonError("Lesson not found");
+  if (lesson.status !== "CANCELLED" && lesson.status !== "NO_SHOW") throw new LessonError("Make-up credits are for cancelled or missed lessons");
+  const already = new Set(lesson.makeupCredits.map((c) => c.studentId));
+  const day = localDateOnly(new Date(), lesson.organization.timezone);
+  let made = 0;
+  for (const seat of lesson.students) {
+    if (!seat.charge || seat.charge.voidedAt || seat.charge.amountCents <= 0 || already.has(seat.studentId)) continue;
+    await db.charge.create({
+      data: {
+        organizationId: lesson.organizationId, accountId: seat.student.accountId, studentId: seat.studentId, kind: "ADJUSTMENT",
+        amountCents: -seat.charge.amountCents, chargedOn: day, sourceLessonId: lesson.id,
+        description: `Make-up credit${opts.reason ? `, ${opts.reason.toLowerCase()}` : ""}: ${lesson.subject} on ${localDateStr(lesson.startsAt, lesson.organization.timezone)}`,
+      },
+    });
+    made++;
+  }
+  for (const accountId of new Set(lesson.students.map((s) => s.student.accountId))) await rebuildAccountAllocations(db, accountId);
+  return made;
 }
 
 /** Undo a cancellation: status back to SCHEDULED or COMPLETED, charge un-voided. */
@@ -283,11 +389,14 @@ export async function restoreLesson(db: Db, lessonId: string) {
   await db.$transaction(async (tx) => {
     await tx.lesson.update({ where: { id: lessonId }, data: { status } });
     await tx.lessonStudent.updateMany({ where: { lessonId }, data: { status } });
+    // The charge comes back at the full price, whatever the cancellation policy took off.
     for (const seat of lesson.students) {
-      if (seat.charge?.voidedAt) {
-        await tx.charge.update({ where: { id: seat.charge.id }, data: { voidedAt: null, voidReason: null } });
+      if (seat.charge) {
+        await tx.charge.update({ where: { id: seat.charge.id }, data: { voidedAt: null, voidReason: null, amountCents: seat.priceCents, description: chargeDescription(lesson.subject, lesson.durationMin, lesson.students.length) } });
       }
     }
+    // A make-up credit for a lesson that is back on is no longer owed.
+    await tx.charge.updateMany({ where: { sourceLessonId: lessonId, voidedAt: null }, data: { voidedAt: new Date(), voidReason: "Lesson restored" } });
   });
   for (const accountId of new Set(lesson.students.map((s) => s.student.accountId))) {
     await rebuildAccountAllocations(db, accountId);

@@ -1,12 +1,12 @@
 /**
  * The family sign-up link. The owner turns it on and gets /join/CODE to share;
- * a family fills in the form and a student with a new family account and a
- * parent contact appears, marked as coming from the form.
+ * a family fills in the form and an inquiry lands in the pipeline, marked as
+ * coming from the form. Enrolling it there makes the student and the account.
  */
 import { randomBytes } from "node:crypto";
 import type { PrismaClient } from "../../generated/prisma/client";
 import { EmailError, emailConfigured, sendEmail } from "../email/send";
-import { PeopleError, createStudent } from "./people";
+import { LeadError, createLead } from "./leads";
 
 export class IntakeError extends Error {}
 
@@ -49,51 +49,40 @@ export async function submitIntake(db: PrismaClient, code: string, input: Intake
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.parentEmail.trim())) throw new IntakeError("Enter a valid parent email");
 
   const day = now.toISOString().slice(0, 10);
-  const noteLines = [
-    `Signed up through the family form on ${day}.`,
-    input.subjects?.trim() ? `Wants help with: ${input.subjects.trim()}` : null,
-    input.goals?.trim() ? `Goals: ${input.goals.trim()}` : null,
-  ].filter(Boolean).join("\n");
-
-  let student;
+  let lead;
   try {
-    student = await createStudent(db, org.id, {
-      firstName: input.studentFirstName,
-      lastName: input.studentLastName,
-      grade: input.grade,
-      schoolName: input.school,
-      email: input.studentEmail,
-      phone: input.studentPhone,
-      defaultSubject: input.subjects?.trim().slice(0, 120) || null,
-      notes: noteLines,
-    }, { guardian: { name: input.parentName, email: input.parentEmail, phone: input.parentPhone } });
+    lead = await createLead(db, org.id, {
+      studentFirstName: input.studentFirstName, studentLastName: input.studentLastName, grade: input.grade, schoolName: input.school,
+      studentEmail: input.studentEmail, studentPhone: input.studentPhone, parentName: input.parentName, parentEmail: input.parentEmail, parentPhone: input.parentPhone,
+      subjects: input.subjects, goals: input.goals, source: "form", notes: `Signed up through the family form on ${day}.`,
+    });
   } catch (e) {
-    if (e instanceof PeopleError) throw new IntakeError(e.message);
+    if (e instanceof LeadError) throw new IntakeError(e.message);
     throw e;
   }
 
   // Confirmation to the family, and a heads-up to the school. A mail failure never loses the sign-up.
   if (emailConfigured()) {
-    const who = `${student.firstName} ${student.lastName}`;
+    const who = `${lead.studentFirstName} ${lead.studentLastName}`;
     try {
       await sendEmail(db, org.id, "INTAKE_CONFIRMATION", {
         to: input.parentEmail.trim(),
-        subject: `${org.name}: we received ${student.firstName}'s sign-up`,
+        subject: `${org.name}: we received ${lead.studentFirstName}'s sign-up`,
         text: [`Hello ${input.parentName.trim().split(" ")[0]},`, "", `Thank you for signing up ${who}. We will be in touch soon to set up the first lesson.`, "", org.phone ? `Questions? Reply to this email or call ${org.phone}.` : "Questions? Reply to this email.", "", org.name].join("\n"),
         replyTo: org.replyToEmail,
-      }, { type: "student", id: student.id });
+      }, { type: "lead", id: lead.id });
       const owner = await db.membership.findFirst({ where: { organizationId: org.id, role: "OWNER" }, include: { user: { select: { email: true } } }, orderBy: { createdAt: "asc" } });
       const to = org.replyToEmail ?? owner?.user.email;
       if (to) {
         await sendEmail(db, org.id, "OTHER", {
           to,
-          subject: `New sign-up: ${who}`,
-          text: [`${who} signed up through the family form.`, "", `Parent: ${input.parentName.trim()} · ${input.parentEmail.trim()}${input.parentPhone ? ` · ${input.parentPhone}` : ""}`, input.grade ? `Grade: ${input.grade}` : null, noteLines].filter(Boolean).join("\n"),
-        }, { type: "student", id: student.id });
+          subject: `New inquiry: ${who}`,
+          text: [`${who} signed up through the family form. It is waiting in Leads.`, "", `Parent: ${input.parentName.trim()} · ${input.parentEmail.trim()}${input.parentPhone ? ` · ${input.parentPhone}` : ""}`, input.grade ? `Grade: ${input.grade}` : null, lead.subjects ? `Wants help with: ${lead.subjects}` : null, lead.goals ? `Goals: ${lead.goals}` : null].filter(Boolean).join("\n"),
+        }, { type: "lead", id: lead.id });
       }
     } catch (e) {
       if (!(e instanceof EmailError)) throw e;
     }
   }
-  return student;
+  return lead;
 }

@@ -26,6 +26,8 @@ export interface SessionUser {
   organizationName: string;
   timezone: string;
   role: string;
+  /** The Tutor row this login represents, when the role is TUTOR and the owner linked them. */
+  tutorId: string | null;
 }
 
 /** Check email and password. Returns the raw session token to put in the cookie. */
@@ -69,6 +71,7 @@ export async function sessionFromToken(db: PrismaClient, token: string | undefin
     organizationName: m.organization.name,
     timezone: m.organization.timezone,
     role: m.role,
+    tutorId: m.tutorId,
   };
 }
 

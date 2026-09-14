@@ -11,6 +11,7 @@ import { dateOnlyFromStr, localDateOnly, localDateStr, localTimeStr, zonedToUtc 
 import { formatRule, parseRule, weeklyOccurrences, weeklyOccurrencesAfter } from "../lib/recurrence";
 import { rebuildAccountAllocations } from "./allocation";
 import { LessonError, type LessonInput, type LessonUpdate, addSeat, cancelLesson, deleteLesson, resolveRoster, updateLesson } from "./lessons";
+import { holidayRanges } from "./holidays";
 
 export const HORIZON_DAYS = 180;
 
@@ -18,6 +19,8 @@ export interface SeriesInput extends LessonInput {
   intervalWeeks?: number;
   /** "YYYY-MM-DD" in the organization's zone, inclusive. Null = open-ended. */
   until?: string | null;
+  /** Term-time only: skip the school's holidays. */
+  skipHolidays?: boolean;
 }
 
 function horizonDateStr(timeZone: string, from = new Date()): string {
@@ -39,12 +42,14 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
   if (input.until && input.until < firstDate) throw new LessonError("Repeat-until is before the first lesson");
 
   const genUntil = input.until ?? horizonDateStr(tz, input.startsAt > new Date() ? input.startsAt : new Date());
-  const occurrences = weeklyOccurrences({ firstStartsAt: input.startsAt, timeZone: tz, intervalWeeks, until: genUntil });
+  const skip = input.skipHolidays ? await holidayRanges(db, organizationId) : [];
+  const occurrences = weeklyOccurrences({ firstStartsAt: input.startsAt, timeZone: tz, intervalWeeks, until: genUntil, skip });
+  if (occurrences.length === 0) throw new LessonError("Every date in that range is a holiday");
   const now = new Date();
 
   const result = await db.$transaction(async (tx) => {
     const series = await tx.lessonSeries.create({
-      data: { organizationId, rrule: formatRule({ intervalWeeks }), startsAt: input.startsAt, endsOn: input.until ? dateOnlyFromStr(input.until) : null },
+      data: { organizationId, rrule: formatRule({ intervalWeeks }), startsAt: input.startsAt, endsOn: input.until ? dateOnlyFromStr(input.until) : null, skipHolidays: !!input.skipHolidays },
     });
     const ids: string[] = [];
     for (const startsAt of occurrences) {
@@ -87,13 +92,14 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
   );
   let created = 0;
   const touchedAccounts = new Set<string>();
+  const holidays = series.some((s) => s.skipHolidays) ? await holidayRanges(db, organizationId) : [];
   for (const s of series) {
     const last = s.lessons[0];
     if (!last) continue;
     const roster = last.students.filter((x) => !x.student.deletedAt && !x.student.archivedAt).map((x) => ({ studentId: x.studentId, priceCents: x.priceCents, student: x.student }));
     if (last.students.length > 0 && roster.length === 0) continue; // everyone left
     const { intervalWeeks } = parseRule(s.rrule);
-    const dates = weeklyOccurrencesAfter({ firstStartsAt: s.startsAt, timeZone: org.timezone, intervalWeeks, after: reached.get(s.id) ?? last.startsAt, until });
+    const dates = weeklyOccurrencesAfter({ firstStartsAt: s.startsAt, timeZone: org.timezone, intervalWeeks, after: reached.get(s.id) ?? last.startsAt, until, skip: s.skipHolidays ? holidays : [] });
     if (dates.length === 0) continue;
     await db.$transaction(async (tx) => {
       for (const startsAt of dates) {

@@ -30,7 +30,12 @@ export interface StudentInput {
   defaultPriceCents?: number | null;
   difficulties?: string | null;
   notes?: string | null;
+  /** Left out = unchanged (or ACTIVE for a new student). */
+  status?: "ACTIVE" | "PAUSED" | "GRADUATED";
 }
+
+export const STUDENT_STATUSES = ["ACTIVE", "PAUSED", "GRADUATED"] as const;
+export const STUDENT_STATUS_LABEL: Record<(typeof STUDENT_STATUSES)[number], string> = { ACTIVE: "active", PAUSED: "paused", GRADUATED: "graduated" };
 
 export interface GuardianInput {
   name: string;
@@ -54,6 +59,7 @@ function studentData(input: StudentInput) {
   if (dob && !isDate(dob)) throw new PeopleError("Date of birth must be a date");
   const price = input.defaultPriceCents;
   if (price != null && (!Number.isInteger(price) || price < 0)) throw new PeopleError("Usual price must be zero or more");
+  if (input.status !== undefined && !STUDENT_STATUSES.includes(input.status)) throw new PeopleError("Pick a status");
   return {
     firstName,
     lastName,
@@ -66,6 +72,7 @@ function studentData(input: StudentInput) {
     defaultPriceCents: price ?? null,
     difficulties: clean(input.difficulties),
     notes: clean(input.notes),
+    ...(input.status !== undefined ? { status: input.status } : {}),
   };
 }
 
@@ -169,12 +176,19 @@ export async function moveStudent(
 
 // ---------------------------------------------------------------- accounts and contacts
 
-export async function updateAccount(db: PrismaClient, organizationId: string, accountId: string, input: { name: string; notes?: string | null }) {
+export async function updateAccount(db: PrismaClient, organizationId: string, accountId: string, input: { name: string; notes?: string | null; emailReminders?: boolean; emailNotes?: boolean }) {
   const account = await db.account.findFirst({ where: { id: accountId, organizationId } });
   if (!account) throw new PeopleError("Account not found");
   const name = input.name.trim();
   if (!name) throw new PeopleError("Account name is required");
-  return db.account.update({ where: { id: accountId }, data: { name, notes: clean(input.notes) } });
+  return db.account.update({
+    where: { id: accountId },
+    data: {
+      name, notes: clean(input.notes),
+      ...(input.emailReminders !== undefined ? { emailReminders: input.emailReminders } : {}),
+      ...(input.emailNotes !== undefined ? { emailNotes: input.emailNotes } : {}),
+    },
+  });
 }
 
 /** Only one primary and one billing contact per account: setting it here clears it elsewhere. */

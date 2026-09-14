@@ -30,10 +30,22 @@ function addDays(dateStr: string, days: number): string {
   return t.toISOString().slice(0, 10);
 }
 
+/** A closed date range, "YYYY-MM-DD" both ends, that a term-time series skips. */
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+export function inRanges(dateStr: string, ranges: DateRange[] | undefined): boolean {
+  return !!ranges?.some((r) => dateStr >= r.from && dateStr <= r.to);
+}
+
 /**
  * Occurrence instants for a series, from its first lesson up to and including
  * `until` (a calendar date, "YYYY-MM-DD" in the zone), or `count` occurrences,
- * whichever comes first. Includes the first occurrence.
+ * whichever comes first. Includes the first occurrence. Dates inside `skip`
+ * (school holidays) are left out and do not count toward `count`; the loop
+ * still stops after ten years of weeks so a bad range cannot spin forever.
  */
 export function weeklyOccurrences(opts: {
   firstStartsAt: Date;
@@ -41,6 +53,7 @@ export function weeklyOccurrences(opts: {
   intervalWeeks: number;
   until?: string | null;
   count?: number | null;
+  skip?: DateRange[];
 }): Date[] {
   const { firstStartsAt, timeZone, intervalWeeks } = opts;
   const max = opts.count ?? 520; // hard stop at ten years of weekly lessons
@@ -48,9 +61,9 @@ export function weeklyOccurrences(opts: {
   const time = localTimeStr(firstStartsAt, timeZone);
   let date = localDateStr(firstStartsAt, timeZone);
   const out: Date[] = [];
-  while (out.length < max) {
+  for (let step = 0; out.length < max && step < 520; step++) {
     if (untilStr && date > untilStr) break;
-    out.push(zonedToUtc(date, time, timeZone));
+    if (!inRanges(date, opts.skip)) out.push(zonedToUtc(date, time, timeZone));
     date = addDays(date, 7 * intervalWeeks);
   }
   return out;
@@ -63,6 +76,7 @@ export function weeklyOccurrencesAfter(opts: {
   intervalWeeks: number;
   after: Date;
   until: string;
+  skip?: DateRange[];
 }): Date[] {
   return weeklyOccurrences({ ...opts, count: null }).filter((d) => d > opts.after);
 }
