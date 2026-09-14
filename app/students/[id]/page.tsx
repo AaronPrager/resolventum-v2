@@ -10,6 +10,7 @@ import { LessonForm } from "@/app/lessons/LessonForm";
 import { cancelLessonAction, createLessonAction, restoreLessonAction } from "@/app/lessons/actions";
 import { Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
+import { archiveStudentAction, unarchiveStudentAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const upcoming = student.lessons.filter((l) => l.lesson.startsAt > now).reverse();
   const past = student.lessons.filter((l) => l.lesson.startsAt <= now);
   const nextSlot = new Date(now.getTime() + 24 * 3600 * 1000);
+  const scheduledSolo = upcoming.filter((l) => l.lesson.status === "SCHEDULED").length;
   const hasNotes = student.lastStopNote || student.nextStartNote || student.difficulties || student.notes;
 
   return (
@@ -35,7 +37,26 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
         title={<span>{student.firstName} {student.lastName}{student.archivedAt && <Badge>archived</Badge>}</span>}
         back={{ href: "/students", label: "Students" }}
         subtitle={[student.grade && `Grade ${student.grade}`, student.schoolName, student.defaultSubject].filter(Boolean).join(" · ")}
-        actions={<><LinkButton href={`/students/${student.id}/update`} variant="primary">Parent update (AI)</LinkButton><LinkButton href={`/homework?student=${student.id}`} variant="secondary">Homework</LinkButton></>}
+        actions={
+          <>
+            <LinkButton href={`/students/${student.id}/update`} variant="primary">Parent update (AI)</LinkButton>
+            <LinkButton href={`/homework?student=${student.id}`} variant="secondary">Homework</LinkButton>
+            {student.archivedAt ? (
+              <form action={unarchiveStudentAction}>
+                <input type="hidden" name="studentId" value={student.id} />
+                <Button variant="secondary">Unarchive</Button>
+              </form>
+            ) : (
+              <ConfirmForm
+                action={archiveStudentAction}
+                message={`Archive ${student.firstName}? ${scheduledSolo > 0 ? `${scheduledSolo} scheduled lesson${scheduledSolo === 1 ? "" : "s"} will be cancelled and any weekly series stops. ` : ""}Past lessons, payments, and the balance stay. You can unarchive later.`}
+              >
+                <input type="hidden" name="studentId" value={student.id} />
+                <Button variant="secondary" className="text-owed">Archive</Button>
+              </ConfirmForm>
+            )}
+          </>
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2">

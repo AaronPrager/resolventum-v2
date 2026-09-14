@@ -70,3 +70,46 @@ export async function studentDetail(prisma: PrismaClient, studentId: string) {
 }
 
 export type StudentDetail = NonNullable<Awaited<ReturnType<typeof studentDetail>>>;
+
+export class StudentError extends Error {}
+
+/**
+ * Archive a student: they leave the pickers and the default list, every
+ * scheduled lesson of theirs from now on is cancelled (charges voided), and a
+ * weekly series that only they were in stops today. History and balance stay.
+ */
+export async function archiveStudent(db: PrismaClient, organizationId: string, studentId: string, now = new Date()): Promise<{ cancelledLessons: number; endedSeries: number }> {
+  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
+  if (!student) throw new StudentError("Student not found");
+  if (student.archivedAt) return { cancelledLessons: 0, endedSeries: 0 };
+
+  const seats = await db.lessonStudent.findMany({
+    where: { studentId, lesson: { startsAt: { gt: now }, status: "SCHEDULED", deletedAt: null } },
+    include: { lesson: { select: { id: true, seriesId: true, _count: { select: { students: true } } } } },
+  });
+  const { cancelLesson } = await import("./lessons");
+  let cancelledLessons = 0;
+  const seriesIds = new Set<string>();
+  for (const seat of seats) {
+    if (seat.lesson._count.students > 1) continue; // a group lesson goes on for the others
+    await cancelLesson(db, seat.lesson.id, "Student archived");
+    cancelledLessons += 1;
+    if (seat.lesson.seriesId) seriesIds.add(seat.lesson.seriesId);
+  }
+  let endedSeries = 0;
+  for (const seriesId of seriesIds) {
+    const stillScheduled = await db.lesson.count({ where: { seriesId, status: "SCHEDULED", startsAt: { gt: now }, deletedAt: null } });
+    if (stillScheduled > 0) continue;
+    await db.lessonSeries.update({ where: { id: seriesId }, data: { endsOn: new Date(now.toISOString().slice(0, 10)) } });
+    endedSeries += 1;
+  }
+  await db.student.update({ where: { id: studentId }, data: { archivedAt: now } });
+  return { cancelledLessons, endedSeries };
+}
+
+/** Bring an archived student back. Cancelled lessons stay cancelled; restore the ones you want. */
+export async function unarchiveStudent(db: PrismaClient, organizationId: string, studentId: string): Promise<void> {
+  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
+  if (!student) throw new StudentError("Student not found");
+  await db.student.update({ where: { id: studentId }, data: { archivedAt: null } });
+}
