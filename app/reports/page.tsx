@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { formatCents } from "@/src/lib/format";
-import { dateOnlyFromStr } from "@/src/lib/tz";
+import { dateOnlyFromStr, localDateOnly } from "@/src/lib/tz";
 import { monthlyReport, studentsByRevenue, tutorPay, yearSummary } from "@/src/services/reports";
 import { accountBalances } from "@/src/services/balances";
 import { Balance, Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
@@ -17,11 +17,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const year = q.year && /^\d{4}$/.test(q.year) ? Number(q.year) : new Date().getFullYear();
   const now = new Date();
   const [y, months, students, tutors, balances] = await Promise.all([
-    yearSummary(prisma, s.organizationId, year, now),
+    yearSummary(prisma, s.organizationId, year, localDateOnly(now, s.timezone)),
     monthlyReport(prisma, s.organizationId, year),
     studentsByRevenue(prisma, s.organizationId, year),
     tutorPay(prisma, s.organizationId, dateOnlyFromStr(`${year}-01-01`), dateOnlyFromStr(`${year + 1}-01-01`)),
-    accountBalances(prisma, s.organizationId, now),
+    accountBalances(prisma, s.organizationId, localDateOnly(now, s.timezone)),
   ]);
   const owing = balances.filter((b) => b.balanceCents > 0).sort((a, b) => b.balanceCents - a.balanceCents);
   const maxPaid = Math.max(1, ...months.map((m) => m.paidCents));

@@ -7,7 +7,7 @@ import { COOKIE_NAME } from "@/src/auth/constants";
 
 export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/calendar/") || pathname.startsWith("/h/") || pathname.startsWith("/api/h/") || pathname.startsWith("/api/health") || pathname.startsWith("/api/cron") || pathname.startsWith("/signup") || pathname.startsWith("/forgot") || pathname.startsWith("/reset")) return NextResponse.next();
+  if (pathname === "/icon.svg" || pathname.startsWith("/login") || pathname.startsWith("/api/calendar/") || pathname.startsWith("/h/") || pathname.startsWith("/api/h/") || pathname.startsWith("/api/health") || pathname.startsWith("/api/cron") || pathname.startsWith("/signup") || pathname.startsWith("/forgot") || pathname.startsWith("/reset")) return NextResponse.next();
   if (!req.cookies.get(COOKIE_NAME)?.value) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { formatDay } from "@/src/lib/format";
+import { localDateOnly } from "@/src/lib/tz";
 import { listStudents } from "@/src/services/students";
 import { Badge, Balance, Card, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
@@ -12,7 +13,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   const includeArchived = q.archived === "1";
   const session = await requireSession();
   const org = { id: session.organizationId, name: session.organizationName, timezone: session.timezone };
-  const rows = await listStudents(prisma, org.id, { includeArchived });
+  const rows = await listStudents(prisma, org.id, localDateOnly(new Date(), session.timezone), { includeArchived });
   return (
     <div className="space-y-6">
       <PageHeader

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { aiConfigured } from "@/src/ai/generate";
+import { formatDate, formatDay } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { assignmentDetail, effectiveStatus } from "@/src/services/homework";
 import { Badge, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Textarea } from "@/src/components/ui";
@@ -34,7 +35,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={a.title}
         back={{ href: "/homework", label: "Homework" }}
-        subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Link href={`/students/${a.student.id}`} className="text-brand hover:underline">{a.student.firstName} {a.student.lastName}</Link><Badge tone={status === "REVIEWED" ? "credit" : status === "OVERDUE" ? "owed" : status === "SOLVED" ? "warn" : "brand"}>{status === "SOLVED" ? "to review" : status.toLowerCase()}</Badge>{a.dueOn && <span>due {a.dueOn.toISOString().slice(0, 10)}</span>}{a.lesson && <span>· from the lesson on {a.lesson.startsAt.toISOString().slice(0, 10)}</span>}</span>}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Link href={`/students/${a.student.id}`} className="text-brand hover:underline">{a.student.firstName} {a.student.lastName}</Link><Badge tone={status === "REVIEWED" ? "credit" : status === "OVERDUE" ? "owed" : status === "SOLVED" ? "warn" : "brand"}>{status === "SOLVED" ? "to review" : status.toLowerCase()}</Badge>{a.dueOn && <span>due {formatDate(a.dueOn)}</span>}{a.lesson && <span>· from the lesson on {formatDay(a.lesson.startsAt, s.timezone)}</span>}</span>}
         actions={a.submissions.length === 0 && (
           <ConfirmForm action={deleteAssignmentAction} message="Delete this assignment? It has no submissions, so nothing else is lost."><input type="hidden" name="assignmentId" value={a.id} /><Button variant="danger">Delete</Button></ConfirmForm>
         )}

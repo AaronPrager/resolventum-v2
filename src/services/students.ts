@@ -16,14 +16,16 @@ export interface StudentRow {
   lessonCount: number;
 }
 
-export async function listStudents(prisma: PrismaClient, organizationId: string, opts: { includeArchived?: boolean } = {}): Promise<StudentRow[]> {
+/** `today` is a calendar day in the school's zone (see localDateOnly); the database session zone is not trusted. */
+export async function listStudents(prisma: PrismaClient, organizationId: string, today: Date, opts: { includeArchived?: boolean } = {}): Promise<StudentRow[]> {
+  const todayStr = today.toISOString().slice(0, 10);
   const rows = await prisma.$queryRaw<
     { id: string; firstName: string; lastName: string; grade: string | null; archivedAt: Date | null; accountId: string; accountName: string;
       balance: bigint; lastLessonAt: Date | null; nextLessonAt: Date | null; lessonCount: bigint }[]
   >`
     select s.id, s."firstName", s."lastName", s.grade, s."archivedAt", s."accountId", a.name as "accountName",
-      coalesce((select sum(c."amountCents") from "Charge" c where c."accountId" = a.id and c."voidedAt" is null and c."chargedOn" <= current_date), 0)::bigint
-      - coalesce((select sum(p."amountCents") from "Payment" p where p."accountId" = a.id and p."voidedAt" is null and p."paidOn" <= current_date), 0)::bigint as balance,
+      coalesce((select sum(c."amountCents") from "Charge" c where c."accountId" = a.id and c."voidedAt" is null and c."chargedOn" <= ${todayStr}::date), 0)::bigint
+      - coalesce((select sum(p."amountCents") from "Payment" p where p."accountId" = a.id and p."voidedAt" is null and p."paidOn" <= ${todayStr}::date), 0)::bigint as balance,
       (select max(l."startsAt") from "LessonStudent" ls join "Lesson" l on l.id = ls."lessonId"
         where ls."studentId" = s.id and l."deletedAt" is null and l.status <> 'CANCELLED' and l."startsAt" <= now()) as "lastLessonAt",
       (select min(l."startsAt") from "LessonStudent" ls join "Lesson" l on l.id = ls."lessonId"

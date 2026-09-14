@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "../../generated/prisma/client";
 import { buildIcs, type IcsEvent } from "../lib/ics";
-import { localTimeStr } from "../lib/tz";
+import { formatTime } from "../lib/format";
 
 function hashToken(t: string) {
   return createHash("sha256").update(t).digest("hex");
@@ -48,7 +48,7 @@ export async function feedForToken(db: PrismaClient, raw: string, now = new Date
   const events: IcsEvent[] = lessons.map((l) => {
     const names = l.students.map((s) => `${s.student.firstName} ${s.student.lastName}`).join(", ") || "No student";
     const desc = [
-      `${l.durationMin} min at ${localTimeStr(l.startsAt, org.timezone)}`,
+      `${l.durationMin} min at ${formatTime(l.startsAt, org.timezone)}`,
       l.tutor ? `Tutor: ${l.tutor.name}` : null,
       l.seriesId ? "Weekly series" : null,
       l.notes ?? null,

@@ -21,6 +21,16 @@ export function formatWhen(date: Date, timeZone: string): string {
   }).format(date);
 }
 
+/** "6:45 PM" in the organization's zone. For display; forms keep HH:MM from localTimeStr. */
+export function formatTime(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+/** "Sep 5, 2026" for a date-only column (stored as UTC midnight). */
+export function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
 export function formatDay(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric", year: "numeric" }).format(date);
 }

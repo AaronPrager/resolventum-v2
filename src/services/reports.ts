@@ -67,7 +67,9 @@ export interface YearSummary {
   creditHeldCents: number;
 }
 
+/** `asOf` is a calendar day in the school's zone (see localDateOnly), not an instant. */
 export async function yearSummary(db: PrismaClient, organizationId: string, year: number, asOf: Date): Promise<YearSummary> {
+  const asOfStr = asOf.toISOString().slice(0, 10);
   const months = await monthlyReport(db, organizationId, year);
   const received = months.reduce((s, r) => s + r.paidCents, 0);
   const refunded = months.reduce((s, r) => s + r.refundedCents, 0);
@@ -85,8 +87,8 @@ export async function yearSummary(db: PrismaClient, organizationId: string, year
     db.$queryRaw<{ owed: bigint; credit: bigint }[]>`
       select coalesce(sum(case when b > 0 then b else 0 end), 0)::bigint owed, coalesce(sum(case when b < 0 then -b else 0 end), 0)::bigint credit from (
         select a.id,
-          coalesce((select sum("amountCents") from "Charge" where "accountId" = a.id and "voidedAt" is null and "chargedOn" <= ${asOf}::date), 0)
-          - coalesce((select sum("amountCents") from "Payment" where "accountId" = a.id and "voidedAt" is null and "paidOn" <= ${asOf}::date), 0) as b
+          coalesce((select sum("amountCents") from "Charge" where "accountId" = a.id and "voidedAt" is null and "chargedOn" <= ${asOfStr}::date), 0)
+          - coalesce((select sum("amountCents") from "Payment" where "accountId" = a.id and "voidedAt" is null and "paidOn" <= ${asOfStr}::date), 0) as b
         from "Account" a where a."organizationId" = ${organizationId}) x`,
   ]);
   const bps = taxYear?.homeOfficeBasisPoints ?? 0;

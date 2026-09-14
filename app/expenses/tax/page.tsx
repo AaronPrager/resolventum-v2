@@ -1,6 +1,6 @@
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { formatCents } from "@/src/lib/format";
+import { formatCents, formatDate } from "@/src/lib/format";
 import { TREATMENT_LABEL, taxSummary } from "@/src/services/expenses";
 import { Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { CategoryForm, TaxYearForm } from "./forms";
@@ -15,7 +15,7 @@ export default async function TaxPage({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-6">
       <PageHeader title={`Tax summary ${year}`} back={{ href: "/expenses", label: "Expenses" }}
-        subtitle={sum.filedAt ? `Marked as filed on ${sum.filedAt.toISOString().slice(0, 10)}.` : "Not filed yet."}
+        subtitle={sum.filedAt ? `Marked as filed on ${formatDate(sum.filedAt)}.` : "Not filed yet."}
         actions={<><LinkButton href={`/expenses/tax?year=${year - 1}`} variant="secondary">{year - 1}</LinkButton><LinkButton href={`/expenses/tax?year=${year + 1}`} variant="secondary">{year + 1}</LinkButton><LinkButton href={`/api/tax-csv?year=${year}`} variant="primary">Download CSV</LinkButton></>} />
       {sum.warnings.map((w) => <p key={w} className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{w}</p>)}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -1,6 +1,6 @@
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { formatCents } from "@/src/lib/format";
+import { formatCents, formatDate } from "@/src/lib/format";
 import { listCategories, listVendors } from "@/src/services/expenses";
 import { Badge, Button, Card, Empty, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { runRecurringAction, stopRecurringAction } from "../actions";
@@ -30,7 +30,7 @@ export default async function RecurringPage() {
                 <Td>{r.description} {!r.active && <Badge>stopped</Badge>}</Td>
                 <Td className="hidden sm:table-cell">{r.vendor?.name ?? ""}</Td>
                 <Td>{r.frequency === "MONTHLY" ? "month" : "year"}</Td>
-                <Td num>{r.active ? r.nextOn.toISOString().slice(0, 10) : ""}</Td>
+                <Td num>{r.active ? formatDate(r.nextOn) : ""}</Td>
                 <Td right num>{formatCents(r.amountCents)}</Td>
                 <Td right num>{r._count.expenses}</Td>
                 <Td right>{r.active && <form action={stopRecurringAction}><input type="hidden" name="id" value={r.id} /><Button variant="link" className="text-xs text-owed">Stop</Button></form>}</Td>

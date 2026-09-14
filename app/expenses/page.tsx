@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { aiConfigured } from "@/src/ai/generate";
-import { formatCents } from "@/src/lib/format";
+import { formatCents, formatDate } from "@/src/lib/format";
 import { dateOnlyFromStr, localDateStr } from "@/src/lib/tz";
 import { listCategories, listExpenses, listVendors, deductibleCents, type TaxTreatment } from "@/src/services/expenses";
 import { Badge, Button, Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
@@ -67,7 +67,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
               <tbody>
                 {rows.map((e) => (
                   <tr key={e.id} className="hover:bg-surface-2">
-                    <Td num>{e.spentOn.toISOString().slice(0, 10)}</Td>
+                    <Td num>{formatDate(e.spentOn)}</Td>
                     <Td>{e.vendor?.name ?? <span className="text-muted">none</span>}</Td>
                     <Td><Link href={`/expenses/${e.id}`} className="font-medium text-brand hover:underline">{e.description}</Link>{e.recurringExpense && <Badge>recurring</Badge>}{e.receipt && <a className="ml-2 text-xs text-brand hover:underline" href={`/api/files/${e.receipt.id}`}>receipt</a>}</Td>
                     <Td className="hidden text-muted sm:table-cell">{e.category.name}</Td>

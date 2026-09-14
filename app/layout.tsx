@@ -35,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span className="text-base font-semibold tracking-tight">Resolventum</span>
               <form action={logoutAction}><button className="text-xs text-brand hover:underline">Sign out</button></form>
             </header>
-            <main className="mx-auto max-w-6xl px-4 py-5 pb-20 md:px-8 md:py-8 md:pb-8">{children}</main>
+            <main className="mx-auto max-w-6xl px-4 py-5 pb-24 md:px-8 md:py-8 md:pb-8">{children}</main>
           </div>
         </div>
         <BottomNav />

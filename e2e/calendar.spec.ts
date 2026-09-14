@@ -25,7 +25,7 @@ test("the week view shows imported lessons at New York times", async ({ page }) 
   await page.goto("/calendar?week=2026-09-14");
   await expect(page.getByRole("heading", { name: "Week of Sep 14" })).toBeVisible();
   const monday = page.locator('[data-day="2026-09-14"]');
-  await expect(monday.getByRole("link", { name: /18:45 · 60 min.*Victoria Li/s })).toBeVisible();
+  await expect(monday.getByRole("link", { name: /2:45 PM · 60 min.*Victoria Li/s })).toBeVisible();
   await page.getByRole("link", { name: "Next" }).click();
   await expect(page.getByRole("heading", { name: "Week of Sep 21" })).toBeVisible();
 });
@@ -46,9 +46,9 @@ test("a weekly series from the calendar creates four lessons and can be cut shor
 
   // Back on the calendar week, the first one is there at 4 pm, and the DST switch on Nov 7 does not move the time.
   await expect(page.getByRole("heading", { name: "Week of Nov 1" })).toBeVisible();
-  await expect(page.locator('[data-day="2027-11-02"]').getByRole("link", { name: new RegExp(`16:00.*${SUBJECT}`, "s") })).toBeVisible();
+  await expect(page.locator('[data-day="2027-11-02"]').getByRole("link", { name: new RegExp(`4:00 PM.*${SUBJECT}`, "s") })).toBeVisible();
   await page.getByRole("link", { name: "Next" }).click();
-  await expect(page.locator('[data-day="2027-11-09"]').getByRole("link", { name: new RegExp(`16:00.*${SUBJECT}`, "s") })).toBeVisible();
+  await expect(page.locator('[data-day="2027-11-09"]').getByRole("link", { name: new RegExp(`4:00 PM.*${SUBJECT}`, "s") })).toBeVisible();
   const lessons = await prisma.lesson.findMany({ where: { subject: SUBJECT }, orderBy: { startsAt: "asc" } });
   expect(lessons.length).toBe(4);
   expect(lessons.map((l) => l.startsAt.toISOString())).toEqual([

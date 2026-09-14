@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { formatCents } from "@/src/lib/format";
+import { formatCents, formatDate } from "@/src/lib/format";
 import { localDateStr } from "@/src/lib/tz";
 import { accountStatement } from "@/src/services/statement";
 import { AdjustmentForm, PaymentForm } from "@/app/payments/MoneyForms";
@@ -20,16 +20,27 @@ function parseDate(s: string | undefined): Date | null {
 }
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
 
-export default async function AccountPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string; to?: string }> }) {
+export default async function AccountPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string; to?: string; all?: string }> }) {
   const session = await requireSession();
   const { id } = await params;
   const q = await searchParams;
-  const from = parseDate(q.from);
-  const to = parseDate(q.to);
+  const all = q.all === "1";
+  // With no range, show this year with the earlier balance carried in; "All time" lists everything.
+  let from = parseDate(q.from) ?? (all || q.to ? null : new Date(`${new Date().getUTCFullYear()}-01-01T00:00:00Z`));
+  // The default period ends today: scheduled lessons ahead are on the calendar, not on the bill.
+  const to = parseDate(q.to) ?? (all || q.from ? null : new Date(`${localDateStr(new Date(), session.timezone)}T00:00:00Z`));
+  const defaulted = !q.from && !q.to && !all;
   const owned = await prisma.account.findFirst({ where: { id, organizationId: session.organizationId }, select: { id: true } });
   if (!owned) notFound();
-  const st = await accountStatement(prisma, id, { from, to });
+  let st = await accountStatement(prisma, id, { from, to });
   if (!st) notFound();
+  // An account with nothing this year (an old student, say) shows its whole history instead of an empty page.
+  let showingAll = all;
+  if (defaulted && st.entries.length === 0) {
+    st = (await accountStatement(prisma, id, { from: null, to: null })) ?? st;
+    showingAll = true;
+    from = null;
+  }
   const account = await prisma.account.findUniqueOrThrow({
     where: { id },
     include: { organization: { select: { timezone: true } }, students: { where: { deletedAt: null }, orderBy: { firstName: "asc" } }, guardians: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }] } },
@@ -44,7 +55,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
     <div className="space-y-6">
       <PageHeader
         title={st.accountName}
-        back={{ href: "/", label: "All accounts" }}
+        back={{ href: "/accounts", label: "All accounts" }}
         subtitle={
           <span>
             {account.students.map((s) => <Link key={s.id} href={`/students/${s.id}`} className="mr-3 text-brand hover:underline">{s.firstName} {s.lastName}</Link>)}
@@ -74,7 +85,8 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
             <Field label="From"><Input type="date" name="from" defaultValue={from ? fmtDate(from) : ""} /></Field>
             <Field label="To"><Input type="date" name="to" defaultValue={to ? fmtDate(to) : ""} /></Field>
             <Button type="submit" variant="secondary">Show</Button>
-            {(from || to) && <LinkButton href={`/accounts/${id}`} variant="ghost">All time</LinkButton>}
+            {(from || to) && <LinkButton href={`/accounts/${id}?all=1`} variant="ghost">All time</LinkButton>}
+            {!defaulted && !showingAll && <LinkButton href={`/accounts/${id}`} variant="ghost">This year</LinkButton>}
           </form>
         }
       >
@@ -85,14 +97,14 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
               <tbody>
                 {st.entries.map((e) => (
                   <tr key={`${e.kind}-${e.id}`} className="hover:bg-surface-2">
-                    <Td num>{fmtDate(e.date)}</Td>
+                    <Td num>{formatDate(e.date)}</Td>
                     <Td>
                       <div>{e.description}{e.studentName && st.studentNames.length > 1 && <span className="text-muted"> ({e.studentName})</span>}</div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
                         <Badge tone={e.kind === "payment" ? "credit" : e.subkind === "LESSON" ? "neutral" : "brand"}>
                           {e.kind === "charge" ? e.subkind.toLowerCase() : e.subkind.toLowerCase().replace("_", " ")}
                         </Badge>
-                        {e.appliedPayments.length > 0 && <span>paid by {e.appliedPayments.map((a) => `${formatCents(a.amountCents)} on ${fmtDate(a.paidOn)}`).join(", ")}</span>}
+                        {e.appliedPayments.length > 0 && <span>paid by {e.appliedPayments.map((a) => `${formatCents(a.amountCents)} on ${formatDate(a.paidOn)}`).join(", ")}</span>}
                       </div>
                     </Td>
                     <Td right num>{e.kind === "charge" ? formatCents(e.deltaCents) : ""}</Td>

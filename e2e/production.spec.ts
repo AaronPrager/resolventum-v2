@@ -38,7 +38,7 @@ test.describe("without a session", () => {
     await f.getByRole("button", { name: "Create my account" }).click();
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByTestId("org-form").getByLabel("Name shown to families")).toHaveValue("Signup Test School");
-    await page.goto("/");
+    await page.goto("/accounts");
     await expect(page.getByRole("heading", { name: "Signup Test School" })).toBeVisible();
     await expect(page.getByText("Every account is at zero.")).toBeVisible();
   });

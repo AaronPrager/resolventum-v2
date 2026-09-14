@@ -45,14 +45,14 @@ async function main() {
       (select count(*) from "Lesson" where "studentId" is not null) lessons,
       (select count(*) from "Payment" where type <> 'ADJUSTMENT') payments,
       (select count(*) from "Payment" where type = 'ADJUSTMENT') adjustments,
-      (select count(*) from "Transaction") expenses,
-      (select count(*) from "Transaction" where "isRecurring") recurring,
+      (select count(*) from "Transaction" where date <= now()) expenses,
+      (select count(distinct lower(description)) from "Transaction" where "isRecurring" or "recurringTemplateId" is not null or date > now()) recurring,
       (select count(*) from "Assignment") + (select count(*) from "StudentAssignedResource") assignments,
       (select count(*) from "Submission") submissions,
       (select count(*) from "LessonProgress") progress,
       (select count(*) from "UserResource") library_files,
       (select count(*) from "Payment" where "taxReturnReportedAt" is not null) payments_tax_reported,
-      (select count(*) from "Transaction" where "taxReturnReportedAt" is not null) expenses_tax_reported
+      (select count(*) from "Transaction" where "taxReturnReportedAt" is not null and date <= now()) expenses_tax_reported
   `))[0];
   const c2 = (await v2(`
     select
@@ -77,7 +77,7 @@ async function main() {
       (select coalesce(sum(round(price * 100)), 0) from "Lesson" where "studentId" is not null) billed,
       (select coalesce(sum(round(amount * 100)), 0) from "Payment" where type <> 'ADJUSTMENT') paid,
       (select coalesce(sum(round(-amount * 100)), 0) from "Payment" where type = 'ADJUSTMENT') adjusted,
-      (select coalesce(sum(round("grossAmount" * 100)), 0) from "Transaction") spent
+      (select coalesce(sum(round("grossAmount" * 100)), 0) from "Transaction" where date <= now()) spent
   `))[0];
   const m2 = (await v2(`
     select
@@ -97,7 +97,7 @@ async function main() {
   const ex1 = await v1(`
     select (case when extract(year from date) < 100 then extract(year from date) + 2000 else extract(year from date) end)::int y,
            "taxTreatment" t, sum(round("grossAmount" * 100)) c
-    from "Transaction" group by 1, 2 order by 1, 2`);
+    from "Transaction" where date <= now() group by 1, 2 order by 1, 2`);
   const ex2 = await v2(`select extract(year from "spentOn")::int y, "taxTreatment" t, sum("amountCents") c from "Expense" group by 1, 2 order by 1, 2`);
   for (const r of ex1) check(`${r.y} ${r.t}`, r.c, ex2.find((x) => x.y === r.y && x.t === r.t)?.c ?? 0, "cents");
 

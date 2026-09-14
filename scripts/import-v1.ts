@@ -20,6 +20,10 @@ const SOURCE_URL =
 const TIMEZONE = "America/New_York";
 const CHUNK = 500;
 
+// v1 columns are "timestamp without time zone" holding UTC (the v1 client sent
+// toISOString()). node-postgres would parse them in the machine's zone, which
+// shifted every lesson by the local offset. Parse them as UTC, whatever the zone.
+pg.types.setTypeParser(1114, (s: string) => new Date(s.replace(" ", "T") + "Z"));
 const src = new pg.Pool({ connectionString: SOURCE_URL });
 const warnings: string[] = [];
 const notes: string[] = [];
@@ -43,10 +47,6 @@ function mkDate(y: number, m0: number, d: number): Date {
   out.setUTCHours(0, 0, 0, 0);
   return out;
 }
-/** Calendar date of a timestamp, taken in UTC. For v1 columns saved as local midnight. */
-function utcDate(ts: Date): Date {
-  return mkDate(ts.getUTCFullYear(), ts.getUTCMonth(), ts.getUTCDate());
-}
 const nyFormat = new Intl.DateTimeFormat("en-CA", {
   timeZone: TIMEZONE,
   year: "numeric",
@@ -57,6 +57,21 @@ const nyFormat = new Intl.DateTimeFormat("en-CA", {
 function nyDate(ts: Date): Date {
   const [y, m, d] = nyFormat.format(ts).split("-").map(Number);
   return mkDate(y, m - 1, d);
+}
+/**
+ * Calendar date of a v1 date-only column. Two eras exist: rows saved as New
+ * York midnight (04:00 or 05:00 UTC, the majority) and rows saved as UTC
+ * midnight (00:00). The first kind is read as a New York date, the second as
+ * written, so both give the day the user typed.
+ */
+function utcDate(ts: Date): Date {
+  return ts.getUTCHours() < 4 ? mkDate(ts.getUTCFullYear(), ts.getUTCMonth(), ts.getUTCDate()) : nyDate(ts);
+}
+/** v1 saved some upload names with UTF-8 bytes read as Latin-1 ("Coulombâ€™s"). Undo that when it decodes cleanly. */
+function fixName(s: string): string {
+  if (!/[\u00c2\u00c3\u00e2]/.test(s)) return s;
+  const back = Buffer.from(s, "latin1").toString("utf8");
+  return back.includes("\ufffd") ? s : back;
 }
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -116,7 +131,7 @@ async function createFile(opts: {
 
 async function main() {
   const startedAt = Date.now();
-  const today = utcDate(new Date());
+  const today = nyDate(new Date());
 
   // 0. Wipe v2.
   const tables = await prisma.$queryRaw<{ table_name: string }[]>`
@@ -306,6 +321,7 @@ async function main() {
     }
   }
   const studentIds = new Set(students.map((s) => s.id));
+  const studentById = new Map(students.map((s) => [s.id, s] as const));
   if (storedCredits.length) {
     notes.push(
       `Student.credit column ignored (Aaron confirmed 2026-09-11 the ledger is right and this column is stale): ${storedCredits.join("; ")}`,
@@ -321,7 +337,7 @@ async function main() {
     const fileId = await createFile({
       id: r.id,
       organizationId: orgId,
-      name: r.originalName,
+      name: fixName(r.originalName),
       mimeType: r.mimeType ?? "application/octet-stream",
       data: r.data,
       uploadedById: r.userId,
@@ -329,6 +345,7 @@ async function main() {
     });
     resourceToFile.set(r.id, fileId);
     resourceByName.set(r.originalName, fileId);
+    resourceByName.set(fixName(r.originalName), fileId);
     if (fileId === r.id) {
       await prisma.libraryItem.create({ data: { fileId, createdAt: r.createdAt, updatedAt: r.updatedAt } });
     }
@@ -388,6 +405,12 @@ async function main() {
       }
     }
     const status = l.dateTime <= now ? "COMPLETED" : "SCHEDULED";
+    // v1 often put the student's own name in "subject"; that says nothing, so it becomes blank.
+    const subjectFor = (row: Record<string, any>): string => {
+      const st = row.studentId ? studentById.get(row.studentId) : null;
+      const s = String(row.subject ?? "").trim();
+      return st && s.toLowerCase() === `${st.firstName} ${st.lastName}`.trim().toLowerCase() ? "" : s;
+    };
     lessonRows.push({
       id: l.id,
       organizationId: orgId,
@@ -396,7 +419,7 @@ async function main() {
       startsAt: l.dateTime,
       durationMin: l.duration,
       allDay: Boolean(l.allDay),
-      subject: l.subject,
+      subject: subjectFor(l),
       category: l.category ? categoryFor[l.category] : null,
       locationType: l.locationType === "remote" ? ("REMOTE" as const) : ("IN_PERSON" as const),
       meetingLink: l.link ?? null,
@@ -681,35 +704,12 @@ async function main() {
     });
   }
 
-  // 14. Expenses. A v1 recurring "template" row is a real expense on its own date and also the series definition.
-  const txs = await q<Record<string, any>>(`select * from "Transaction" where "organizationId" = $1 order by date`, [orgId]);
-  const templateIds = new Set(txs.filter((t) => t.isRecurring).map((t) => t.id));
-  const freqFor: Record<string, "MONTHLY" | "YEARLY"> = { MONTHLY: "MONTHLY", YEARLY: "YEARLY" };
-  for (const t of txs.filter((t) => t.isRecurring)) {
-    const instances = txs.filter((i) => i.recurringTemplateId === t.id);
-    const last = instances.reduce((m, i) => (i.date > m ? i.date : m), t.date);
-    await prisma.recurringExpense.create({
-      data: {
-        id: t.id,
-        organizationId: orgId,
-        description: t.description,
-        vendorId: t.vendor ? vendorIdByKey.get(vendorKey(t.vendor)) ?? null : null,
-        categoryId: t.categoryId,
-        amountCents: cents(t.grossAmount),
-        taxTreatment: t.taxTreatment,
-        businessPercent: t.businessPercent,
-        paymentSourceId: t.paymentMethodId,
-        frequency: freqFor[t.recurringFrequency] ?? fail(`unknown recurringFrequency ${t.recurringFrequency} on ${t.id}`),
-        nextOn: utcDate(t.recurringNextDate ?? last),
-        endsOn: t.recurringEndDate ? utcDate(t.recurringEndDate) : null,
-        active: !t.recurringEndDate || t.recurringEndDate > now,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      },
-    });
-  }
-  const expenseRows = [];
-  for (const t of txs) {
+  // 14. Expenses. v1 kept recurring costs loosely: a new "template" row most months, instances
+  // pre-generated years ahead, and for some series plain rows with no link at all. v2 has one
+  // series per description and makes each instance when its day comes (runRecurring), so rows
+  // dated after today are dropped and each series resumes from the first dropped date.
+  const txsRaw = await q<Record<string, any>>(`select * from "Transaction" where "organizationId" = $1 order by date`, [orgId]);
+  const txs: Record<string, any>[] = txsRaw.map((t) => {
     let spentOn = utcDate(t.date);
     if (spentOn.getUTCFullYear() < 100) {
       const fixed = mkDate(spentOn.getUTCFullYear() + 2000, spentOn.getUTCMonth(), spentOn.getUTCDate());
@@ -717,11 +717,62 @@ async function main() {
       spentOn = fixed;
     }
     if (spentOn.getUTCFullYear() < 2020) fail(`expense ${t.id} has date ${spentOn.toISOString()}`);
-    if (t.recurringTemplateId && !templateIds.has(t.recurringTemplateId)) warn(`expense ${t.id}: template ${t.recurringTemplateId} missing; imported as standalone`);
+    return { ...t, spentOn };
+  });
+  const seriesKey = (t: Record<string, any>) => String(t.description ?? "").trim().toLowerCase();
+  const future = txs.filter((t) => t.spentOn > today);
+  const seriesKeys = new Set<string>();
+  for (const t of txs) if (t.isRecurring || t.recurringTemplateId || t.spentOn > today) seriesKeys.add(seriesKey(t));
+  const freqFor: Record<string, "MONTHLY" | "YEARLY"> = { MONTHLY: "MONTHLY", YEARLY: "YEARLY" };
+  const addPeriod = (d: Date, f: "MONTHLY" | "YEARLY") => {
+    const out = new Date(d);
+    if (f === "MONTHLY") out.setUTCMonth(out.getUTCMonth() + 1); else out.setUTCFullYear(out.getUTCFullYear() + 1);
+    return out;
+  };
+  const seriesIdByKey = new Map<string, string>();
+  const stopped: string[] = [];
+  for (const key of seriesKeys) {
+    const rows = txs.filter((t) => seriesKey(t) === key).sort((a, b) => a.spentOn.getTime() - b.spentOn.getTime());
+    const past = rows.filter((t) => t.spentOn <= today);
+    const ahead = rows.filter((t) => t.spentOn > today);
+    const latest = past[past.length - 1] ?? rows[0];
+    const template = rows.find((t) => t.isRecurring) ?? latest;
+    const frequency = freqFor[template.recurringFrequency] ?? "MONTHLY";
+    const endsOn = rows.map((t) => t.recurringEndDate).filter(Boolean).sort().pop();
+    const recent = latest.spentOn.getTime() > today.getTime() - (frequency === "MONTHLY" ? 45 : 400) * 86400000;
+    // Active only if v1 was still producing rows for it; a stale series with an old "next" date would otherwise backfill months of duplicates on the first run.
+    const active = ahead.length > 0 || (recent && !(endsOn && endsOn <= now));
+    if (!active) stopped.push(`${latest.description} (last ${latest.spentOn.toISOString().slice(0, 10)})`);
+    await prisma.recurringExpense.create({
+      data: {
+        id: template.id,
+        organizationId: orgId,
+        description: latest.description,
+        vendorId: latest.vendor ? vendorIdByKey.get(vendorKey(latest.vendor)) ?? null : null,
+        categoryId: latest.categoryId ?? fail(`expense ${latest.id} has no categoryId`),
+        amountCents: cents(latest.grossAmount),
+        taxTreatment: latest.taxTreatment,
+        businessPercent: latest.businessPercent ?? null,
+        paymentSourceId: latest.paymentMethodId ?? null,
+        frequency,
+        nextOn: ahead[0]?.spentOn ?? addPeriod(latest.spentOn, frequency),
+        endsOn: endsOn && !(ahead.length > 0 && endsOn <= now) ? utcDate(endsOn) : null,
+        active,
+        createdAt: template.createdAt,
+        updatedAt: latest.updatedAt,
+      },
+    });
+    seriesIdByKey.set(key, template.id);
+  }
+  if (future.length) notes.push(`${future.length} pre-generated future expense rows (v1 made them through ${future[future.length - 1].spentOn.toISOString().slice(0, 10)}) not imported; v2 creates each on its date`);
+  notes.push(`${seriesKeys.size} recurring expense series from ${txs.filter((t) => t.isRecurring).length} v1 template rows${stopped.length ? `; marked stopped: ${stopped.join(", ")}` : ""}`);
+  const expenseRows = [];
+  for (const t of txs) {
+    if (t.spentOn > today) continue;
     expenseRows.push({
       id: t.id,
       organizationId: orgId,
-      spentOn,
+      spentOn: t.spentOn,
       description: t.description,
       vendorId: t.vendor ? vendorIdByKey.get(vendorKey(t.vendor)) ?? null : null,
       amountCents: cents(t.grossAmount),
@@ -729,7 +780,7 @@ async function main() {
       taxTreatment: t.taxTreatment as "BUSINESS_DIRECT" | "HOME_OFFICE_INDIRECT" | "PARTIAL_USE" | "PERSONAL",
       businessPercent: t.businessPercent ?? null,
       paymentSourceId: t.paymentMethodId ?? null,
-      recurringExpenseId: t.isRecurring ? t.id : templateIds.has(t.recurringTemplateId) ? t.recurringTemplateId : null,
+      recurringExpenseId: seriesIdByKey.get(seriesKey(t)) ?? null,
       notes: t.notes ?? null,
       taxReportedAt: t.taxReturnReportedAt ?? null,
       createdById: t.userId,
@@ -738,7 +789,7 @@ async function main() {
     });
   }
   await inChunks(expenseRows, (c) => prisma.expense.createMany({ data: c }));
-  console.log(`expenses: ${expenseRows.length} (${templateIds.size} recurring series)`);
+  console.log(`expenses: ${expenseRows.length} (${seriesKeys.size} recurring series)`);
 
   // 15. Tax years, one per year that has money in it.
   const years = new Set<number>();

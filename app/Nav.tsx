@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/", label: "Accounts", match: (p: string) => p === "/" || p.startsWith("/accounts") },
+  { href: "/calendar", label: "Calendar", match: (p: string) => p === "/" || p.startsWith("/calendar") || p.startsWith("/lessons") },
+  { href: "/accounts", label: "Accounts", match: (p: string) => p.startsWith("/accounts") },
   { href: "/students", label: "Students", match: (p: string) => p.startsWith("/students") },
-  { href: "/calendar", label: "Calendar", match: (p: string) => p.startsWith("/calendar") || p.startsWith("/lessons") },
   { href: "/payments", label: "Payments", match: (p: string) => p.startsWith("/payments") },
   { href: "/homework", label: "Homework", match: (p: string) => p.startsWith("/homework") || p.startsWith("/library") },
   { href: "/expenses", label: "Expenses", match: (p: string) => p.startsWith("/expenses") },
@@ -38,11 +38,11 @@ export function SideNav() {
 export function BottomNav() {
   const path = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex overflow-x-auto border-t border-line bg-surface md:hidden" aria-label="Main">
+    <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-line bg-surface md:hidden" aria-label="Main">
       {items.map((it) => {
         const active = it.match(path);
         return (
-          <Link key={it.href} href={it.href} aria-current={active ? "page" : undefined} className={`min-w-[4.5rem] flex-1 whitespace-nowrap px-2 py-2.5 text-center text-xs ${active ? "font-semibold text-brand" : "text-muted"}`}>
+          <Link key={it.href} href={it.href} aria-current={active ? "page" : undefined} className={`px-1 py-2 text-center text-xs ${active ? "font-semibold text-brand" : "text-muted"}`}>
             {it.label}
           </Link>
         );

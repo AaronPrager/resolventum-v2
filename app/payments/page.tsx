@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { formatCents } from "@/src/lib/format";
+import { formatCents, formatDate } from "@/src/lib/format";
 import { dateOnlyFromStr, localDateStr } from "@/src/lib/tz";
 import { listPayments } from "@/src/services/payments";
 import { Badge, Card, Empty, LinkButton, Money, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
@@ -54,7 +54,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className={`hover:bg-surface-2 ${r.voidedAt ? "text-muted line-through" : ""}`}>
-                    <Td num>{r.paidOn.toISOString().slice(0, 10)}</Td>
+                    <Td num>{formatDate(r.paidOn)}</Td>
                     <Td><Link href={`/accounts/${r.accountId}`} className="font-medium text-brand hover:underline">{r.accountName}</Link></Td>
                     <Td className="hidden sm:table-cell">{r.method.toLowerCase().replace("_", " ")}{r.reference && <span className="text-muted"> · {r.reference}</span>}</Td>
                     <Td className="hidden text-muted md:table-cell">{r.kind === "REFUND" ? `Refund: ${r.refundReason ?? ""}` : r.notes ?? ""}{r.voidedAt && <span className="ml-2 no-underline"><Badge tone="owed">voided</Badge></span>}</Td>

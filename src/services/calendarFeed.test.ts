@@ -23,7 +23,7 @@ describe("calendar feed", () => {
     const ics = feed!.ics;
     expect(ics).toContain("X-WR-CALNAME:Easy STEM School lessons");
     expect(ics).toContain("SUMMARY:Victoria Li\\, Victoria Li");
-    expect(ics).toContain("DTSTART:20260914T224500Z");
+    expect(ics).toContain("DTSTART:20260914T184500Z");
     expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBeGreaterThan(500);
 
     const second = await issueFeedToken(prisma, membershipId);

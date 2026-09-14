@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { formatCents, formatWhen, localDateStr } from "@/src/lib/format";
+import { formatCents, formatDate, formatWhen, localDateStr } from "@/src/lib/format";
+import { localDateOnly } from "@/src/lib/tz";
 import { studentDetail } from "@/src/services/students";
 import { accountBalances } from "@/src/services/balances";
 import { LessonForm } from "@/app/lessons/LessonForm";
@@ -12,14 +13,15 @@ import { ConfirmForm } from "@/src/components/ConfirmForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StudentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ all?: string }> }) {
   const session = await requireSession();
   const { id } = await params;
+  const showAll = (await searchParams).all === "1";
   const detail = await studentDetail(prisma, id);
   if (!detail || detail.student.organizationId !== session.organizationId) notFound();
   const { student, tutors } = detail;
   const tz = student.organization.timezone;
-  const balances = await accountBalances(prisma, student.organization.id, new Date());
+  const balances = await accountBalances(prisma, student.organization.id, localDateOnly(new Date(), student.organization.timezone));
   const balance = balances.find((b) => b.accountId === student.accountId)?.balanceCents ?? 0;
   const now = new Date();
   const upcoming = student.lessons.filter((l) => l.lesson.startsAt > now).reverse();
@@ -84,13 +86,13 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
         />
       </Card>
 
-      <LessonTable title={`Upcoming (${upcoming.length})`} rows={upcoming} tz={tz} studentId={student.id} testId="upcoming" />
-      <LessonTable title={`Past (${past.length})`} rows={past} tz={tz} studentId={student.id} testId="past" />
+      <LessonTable title={`Upcoming (${upcoming.length})`} rows={showAll ? upcoming : upcoming.slice(0, 8)} hidden={showAll ? 0 : Math.max(0, upcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" />
+      <LessonTable title={`Past (${past.length})`} rows={showAll ? past : past.slice(0, 12)} hidden={showAll ? 0 : Math.max(0, past.length - 12)} tz={tz} studentId={student.id} testId="past" />
 
       {student.progressNotes.length > 0 && (
         <Card title="Progress notes">
           <div className="space-y-1.5 text-sm">
-            {student.progressNotes.map((n) => <p key={n.id}><span className="mr-2 text-muted tabular-nums">{n.notedOn.toISOString().slice(0, 10)}</span>{n.note}</p>)}
+            {student.progressNotes.map((n) => <p key={n.id}><span className="mr-2 text-muted tabular-nums">{formatDate(n.notedOn)}</span>{n.note}</p>)}
           </div>
         </Card>
       )}
@@ -100,7 +102,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
           <div className="space-y-1.5 text-sm">
             {student.assignments.map((a) => (
               <p key={a.id} className="flex flex-wrap items-center gap-2">
-                <span className="text-muted tabular-nums">{a.dueOn ? a.dueOn.toISOString().slice(0, 10) : "no due date"}</span>
+                <span className="text-muted tabular-nums">{a.dueOn ? formatDate(a.dueOn) : "no due date"}</span>
                 <span>{a.title}</span>
                 <Badge tone={a.status === "REVIEWED" ? "credit" : a.status === "OVERDUE" ? "owed" : a.status === "SOLVED" ? "brand" : "neutral"}>{a.status.toLowerCase()}</Badge>
                 {a._count.submissions > 0 && <span className="text-xs text-muted">{a._count.submissions} submitted</span>}
@@ -115,9 +117,9 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
 
 type Seat = NonNullable<Awaited<ReturnType<typeof studentDetail>>>["student"]["lessons"][number];
 
-function LessonTable({ title, rows, tz, studentId, testId }: { title: string; rows: Seat[]; tz: string; studentId: string; testId: string }) {
+function LessonTable({ title, rows, hidden, tz, studentId, testId }: { title: string; rows: Seat[]; hidden: number; tz: string; studentId: string; testId: string }) {
   return (
-    <Card title={title}>
+    <Card title={title} actions={hidden > 0 ? <Link href={`/students/${studentId}?all=1`} className="text-sm text-brand hover:underline">Show all ({hidden} more)</Link> : undefined}>
       {rows.length === 0 ? <Empty>None.</Empty> : (
         <TableWrap>
           <Table data-testid={testId}>

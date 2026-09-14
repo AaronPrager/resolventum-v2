@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
+import { formatDate } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { listAssignments, type EffectiveStatus } from "@/src/services/homework";
 import { listLibrary } from "@/src/services/files";
@@ -43,7 +44,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
                   <tr key={r.id} className="hover:bg-surface-2">
                     <Td><Link href={`/students/${r.studentId}`} className="text-brand hover:underline">{r.studentName}</Link></Td>
                     <Td><Link href={`/homework/${r.id}`} className="font-medium text-brand hover:underline">{r.title}</Link></Td>
-                    <Td num>{r.dueOn ? r.dueOn.toISOString().slice(0, 10) : <span className="text-muted">none</span>}</Td>
+                    <Td num>{r.dueOn ? formatDate(r.dueOn) : <span className="text-muted">none</span>}</Td>
                     <Td><Badge tone={TONE[r.status]}>{r.status === "SOLVED" ? "to review" : r.status.toLowerCase()}</Badge></Td>
                     <Td right num>{r.submissions}</Td>
                   </tr>

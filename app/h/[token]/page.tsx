@@ -1,6 +1,7 @@
 import { prisma } from "@/src/db";
 import { assignmentByToken } from "@/src/services/homework";
 import { SubmitForm } from "./SubmitForm";
+import { formatDate } from "@/src/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function PublicHomeworkPage({ params }: { params: Promise<{
     <>
       <p className="text-xs text-muted">{a.organization.name}</p>
       <h1 className="text-xl font-semibold">{a.title}</h1>
-      <p className="text-sm text-muted">For {a.student.firstName}{a.dueOn && ` · due ${a.dueOn.toISOString().slice(0, 10)}`}</p>
+      <p className="text-sm text-muted">For {a.student.firstName}{a.dueOn && ` · due ${formatDate(a.dueOn)}`}</p>
       {a.description && <p className="mt-3 whitespace-pre-line text-sm">{a.description}</p>}
       {a.files.length > 0 && (
         <div className="mt-4">
@@ -33,7 +34,7 @@ export default async function PublicHomeworkPage({ params }: { params: Promise<{
           <ul className="mt-1 space-y-2 text-sm">
             {a.submissions.map((sub) => (
               <li key={sub.id}>
-                <span className="text-muted tabular-nums">{sub.submittedAt.toISOString().slice(0, 10)}</span>{" "}
+                <span className="text-muted tabular-nums">{formatDate(sub.submittedAt)}</span>{" "}
                 {sub.file ? <a className="text-brand hover:underline" href={`/api/h/${token}/${sub.file.id}`}>{sub.file.name}</a> : sub.note}
                 {sub.feedback && <div className="mt-1 rounded-md bg-credit-soft p-2 whitespace-pre-line">{sub.feedback.comment}{sub.feedback.score != null && <div className="mt-1 text-xs text-credit">Score {sub.feedback.score} of 5</div>}</div>}
               </li>

@@ -46,7 +46,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   // The charge is on the statement, dated the lesson day, and the balance moved from credit 130 to zero.
   await page.goto(`/accounts/${student.accountId}`);
   const entry = page.getByTestId("statement").getByRole("row", { name: new RegExp(SUBJECT) });
-  await expect(entry).toContainText("2027-03-20");
+  await expect(entry).toContainText("Mar 20, 2027");
   await expect(entry).toContainText("$130.00");
   await expect(page.getByTestId("closing-balance")).toContainText("$0.00");
 
