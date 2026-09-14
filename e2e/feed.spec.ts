@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("enable the calendar feed and fetch it without a session", async ({ page, request }) => {
-  await page.goto("/settings");
+  await page.goto("/profile");
   await page.getByRole("button", { name: /Enable feed|Regenerate link/ }).click();
   const box = page.getByTestId("feed-url");
   await expect(box).toBeVisible();

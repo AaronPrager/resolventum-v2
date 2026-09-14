@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, CalendarDays, CreditCard, Ellipsis, GraduationCap, HandCoins, Home, Mail, Receipt, Settings, UserPlus, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, Building2, CalendarDays, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, Receipt, UserPlus, UserRound, Users, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
-interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean }
+interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean; children?: Item[] }
 
 const home: Item = { href: "/", label: "Home", icon: Home, match: (p) => p === "/" };
 const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar") || p.startsWith("/lessons") };
@@ -20,15 +20,21 @@ const payments: Item = { href: "/payments", label: "Payments", icon: CreditCard,
 const expenses: Item = { href: "/expenses", label: "Expenses", icon: Receipt, match: (p) => p.startsWith("/expenses") };
 const reports: Item = { href: "/reports", label: "Reports", icon: BarChart3, match: (p) => p.startsWith("/reports") };
 const earnings: Item = { href: "/earnings", label: "My pay", icon: HandCoins, match: (p) => p.startsWith("/earnings") };
-const settings: Item = { href: "/settings", label: "Settings", icon: Settings, match: (p) => p.startsWith("/settings") };
+const profile: Item = { href: "/profile", label: "Profile", icon: UserRound, match: (p) => p.startsWith("/profile") };
+const officeTutors: Item = { href: "/settings/tutors", label: "Tutors", icon: GraduationCap, match: (p) => p.startsWith("/settings/tutors") };
+const officeTeam: Item = { href: "/settings/team", label: "Team", icon: Users, match: (p) => p.startsWith("/settings/team") };
+const officeAgreement: Item = { href: "/settings/agreement", label: "Agreement", icon: FileSignature, match: (p) => p.startsWith("/settings/agreement") };
+const officeAudit: Item = { href: "/settings/audit", label: "Audit", icon: History, match: (p) => p.startsWith("/settings/audit") };
+/** The school's settings, with its four sub-pages listed underneath in the sidebar. */
+const office: Item = { href: "/settings", label: "Office", icon: Building2, match: (p) => p.startsWith("/settings"), children: [officeTutors, officeTeam, officeAgreement, officeAudit] };
 
-/** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages. */
+/** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages and no office. */
 function menus(role: string) {
-  if (role === "TUTOR") return { teach: [calendar, students, homework, emails], money: [earnings], bar: [calendar, students, homework, earnings], more: [emails, settings] };
-  return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, settings] };
+  if (role === "TUTOR") return { teach: [calendar, students, homework, emails], money: [earnings], foot: [profile], bar: [calendar, students, homework, earnings], more: [emails, profile] };
+  return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], foot: [profile, office], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, profile, office, ...office.children!] };
 }
 
-function NavLink({ it, active, collapsed }: { it: Item; active: boolean; collapsed?: boolean }) {
+function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; collapsed?: boolean; sub?: boolean }) {
   const Icon = it.icon;
   return (
     <Link
@@ -36,20 +42,31 @@ function NavLink({ it, active, collapsed }: { it: Item; active: boolean; collaps
       aria-current={active ? "page" : undefined}
       aria-label={collapsed ? it.label : undefined}
       title={collapsed ? it.label : undefined}
-      className={`group flex h-8 items-center gap-2.5 rounded-lg text-sm transition-colors ${collapsed ? "justify-center px-0" : "px-2.5"} ${
+      className={`group flex h-8 items-center gap-2.5 rounded-lg text-sm transition-colors ${collapsed ? "justify-center px-0" : sub ? "ml-5 px-2.5" : "px-2.5"} ${
         active ? "bg-surface font-medium text-fg shadow-xs ring-1 ring-line" : "text-muted hover:bg-surface-3/70 hover:text-fg"
       }`}
     >
-      <Icon className={`size-[18px] shrink-0 ${active ? "text-brand" : "text-faint group-hover:text-muted"}`} strokeWidth={1.75} aria-hidden />
+      <Icon className={`${sub ? "size-4" : "size-[18px]"} shrink-0 ${active ? "text-brand" : "text-faint group-hover:text-muted"}`} strokeWidth={1.75} aria-hidden />
       {!collapsed && it.label}
     </Link>
+  );
+}
+
+/** A menu entry and, when it has children, those entries indented under it. Folded, only the parent shows. */
+function NavGroup({ it, path, collapsed }: { it: Item; path: string; collapsed?: boolean }) {
+  const childActive = it.children?.some((c) => c.match(path)) ?? false;
+  return (
+    <>
+      <NavLink it={it} active={it.match(path) && !childActive} collapsed={collapsed} />
+      {!collapsed && it.children?.map((c) => <NavLink key={c.href} it={c} active={c.match(path)} sub />)}
+    </>
   );
 }
 
 /** The desktop menu. Folded, it is icons only with the name as a tooltip; the Money heading becomes a rule. */
 export function SideNav({ role, collapsed }: { role: string; collapsed?: boolean }) {
   const path = usePathname();
-  const { teach, money } = menus(role);
+  const { teach, money, foot } = menus(role);
   return (
     <nav className="flex flex-1 flex-col gap-5" aria-label="Main">
       <div className="flex flex-col gap-0.5">{teach.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}</div>
@@ -57,7 +74,7 @@ export function SideNav({ role, collapsed }: { role: string; collapsed?: boolean
         {collapsed ? <div className="mx-2 mb-1 border-t border-line" aria-hidden /> : <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-faint">Money</div>}
         {money.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}
       </div>
-      <div className="mt-auto flex flex-col gap-0.5"><NavLink it={settings} active={settings.match(path)} collapsed={collapsed} /></div>
+      <div className="mt-auto flex flex-col gap-0.5">{foot.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}</div>
     </nav>
   );
 }

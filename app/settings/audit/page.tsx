@@ -13,7 +13,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   const rows = await listAudit(prisma, s.organizationId, { take: 300, subjectType: q.type, subjectId: q.id });
   return (
     <div className="space-y-6">
-      <PageHeader title="Audit trail" back={{ href: "/settings", label: "Settings" }} subtitle="Who did what to lessons, money, and credit, newest first. Written by the app as changes are made; nobody can edit it." />
+      <PageHeader title="Audit trail" back={{ href: "/settings", label: "Office" }} subtitle="Who did what to lessons, money, and credit, newest first. Written by the app as changes are made; nobody can edit it." />
       <Card>
         {rows.length === 0 ? <Empty>Nothing recorded yet.</Empty> : (
           <TableWrap>

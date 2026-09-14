@@ -19,7 +19,7 @@ export default async function TutorsPage() {
   const hours = (a: string | null) => { try { const w = parseAvailability(a); return w ? describeAvailability(w) : null; } catch { return a; } };
   return (
     <div className="space-y-6">
-      <PageHeader title="Tutors" back={{ href: "/settings", label: "Settings" }} subtitle="People who teach. Subjects, what families pay, and what the tutor is paid: per hour, a percent of the lesson, or a rule per subject. To let a tutor sign in, invite them under Team and link the login here." />
+      <PageHeader title="Tutors" back={{ href: "/settings", label: "Office" }} subtitle="People who teach. Subjects, what families pay, and what the tutor is paid: per hour, a percent of the lesson, or a rule per subject. To let a tutor sign in, invite them under Team and link the login here." />
       {s.role === "OWNER" && <Card title="Add a tutor"><TutorForm zones={ZONES} /></Card>}
       {tutors.length === 0 ? <Empty>No tutors yet.</Empty> : tutors.map((t) => (
         <Card key={t.id} title={<span className="inline-flex flex-wrap items-center gap-2"><span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: t.color ?? "var(--brand)" }} />{t.name}{t.archivedAt && <Badge>archived</Badge>}{t.membership && <Badge tone="brand">signs in</Badge>}<span className="text-xs font-normal text-muted">{t._count.lessons} lessons · pay {describeTutorPay(t)}{t.hourlyClientRateCents != null && ` · families pay ${formatCents(t.hourlyClientRateCents)} per hour`}{t.subjects.length > 0 && ` · ${t.subjects.join(", ")}`}{hours(t.availability) && ` · ${hours(t.availability)}`}{t.timezone && ` · ${t.timezone}`}</span></span>}

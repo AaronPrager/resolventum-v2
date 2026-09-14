@@ -3,13 +3,11 @@ import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { aiConfigured } from "@/src/ai/generate";
 import { emailConfigured } from "@/src/email/send";
-import { feedStatus } from "@/src/services/calendarFeed";
 import { Badge, Card, LinkButton, PageHeader } from "@/src/components/ui";
-import { FeedCard } from "./FeedCard";
 import { CopyLink } from "./CopyLink";
 import { intakeAction } from "./actions";
 import { Button } from "@/src/components/ui";
-import { AlertsForm, HolidayForm, LogoForm, OrganizationForm, PasswordForm, PolicyForm } from "./forms";
+import { AlertsForm, HolidayForm, LogoForm, OrganizationForm, PolicyForm } from "./forms";
 import { listHolidays } from "@/src/services/holidays";
 import { EXPORT_KINDS } from "@/src/services/exportData";
 import { formatDate } from "@/src/lib/format";
@@ -22,11 +20,10 @@ const ZONES = ["America/New_York", "America/Chicago", "America/Denver", "America
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const [org, m] = await Promise.all([
+  const [org, holidays] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: session.organizationId } }),
-    prisma.membership.findFirstOrThrow({ where: { userId: session.userId, organizationId: session.organizationId }, select: { id: true } }),
+    listHolidays(prisma, session.organizationId),
   ]);
-  const [status, holidays] = await Promise.all([feedStatus(prisma, m.id), listHolidays(prisma, session.organizationId)]);
   const owner = session.role === "OWNER";
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3100"}`;
@@ -35,7 +32,7 @@ export default async function SettingsPage() {
   const intakeOn = org.studentIntakeEnabled && !!org.intakeCode;
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" subtitle={`${session.email} · ${session.role.toLowerCase()}`} actions={<><LinkButton href="/settings/team" variant="secondary">Team</LinkButton><LinkButton href="/settings/tutors" variant="secondary">Tutors</LinkButton><LinkButton href="/settings/agreement" variant="secondary">Agreement</LinkButton><LinkButton href="/settings/audit" variant="secondary">Audit trail</LinkButton></>} />
+      <PageHeader title="Office" subtitle="How the school runs: its name and details, the cancellation policy, holidays, alerts, the sign-up link, and your data. Your own password and calendar feed are under Profile." actions={<><LinkButton href="/settings/tutors" variant="secondary">Tutors</LinkButton><LinkButton href="/settings/team" variant="secondary">Team</LinkButton><LinkButton href="/settings/agreement" variant="secondary">Agreement</LinkButton><LinkButton href="/settings/audit" variant="secondary">Audit</LinkButton></>} />
       <Card title="Your school">
         <OrganizationForm canEdit={session.role === "OWNER"} zones={zones} org={{ name: org.name, timezone: org.timezone, legalName: org.legalName ?? "", address: org.address ?? "", phone: org.phone ?? "", replyToEmail: org.replyToEmail ?? "", venmoHandle: org.venmoHandle ?? "", zelleHandle: org.zelleHandle ?? "" }} />
       </Card>
@@ -88,7 +85,6 @@ export default async function SettingsPage() {
           {intakeOn && <p className="text-xs text-muted">A new link stops the old one from working.</p>}
         </div>
       </Card>
-      <FeedCard enabled={status.enabled} since={status.since ? status.since.toISOString().slice(0, 10) : null} origin={origin} />
       <Card title="Your data">
         <p className="mb-3 text-sm text-muted">Every table as a spreadsheet, or everything at once. Yours to take whenever you like.</p>
         <div className="flex flex-wrap gap-2" data-testid="exports">
@@ -96,7 +92,6 @@ export default async function SettingsPage() {
           {EXPORT_KINDS.map((k) => <a key={k} href={`/api/export?what=${k}`} className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-3 text-sm shadow-xs hover:bg-surface-2">{k === "notes" ? "session notes" : k}</a>)}
         </div>
       </Card>
-      <Card title="Password"><PasswordForm /></Card>
       <Card title="Server features">
         <div className="flex flex-wrap gap-3 text-sm">
           <span>Email <Badge tone={emailConfigured() ? "credit" : "warn"}>{emailConfigured() ? "on" : "off"}</Badge></span>

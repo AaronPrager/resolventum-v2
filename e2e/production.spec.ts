@@ -76,7 +76,7 @@ test("settings: save the school profile, add a tutor with a rate, change passwor
   await expect(page.getByText("E2E Tutor")).toBeVisible();
   await expect(page.getByText("$45.00 per hour")).toBeVisible();
 
-  await page.goto("/settings");
+  await page.goto("/profile");
   const pw = page.getByTestId("password-form");
   await pw.getByLabel("Current password").fill("wrong");
   await pw.getByLabel("New password", { exact: true }).fill("another long password");

@@ -18,7 +18,7 @@ export default async function TeamPage() {
   const roles = STAFF_ROLES.map((r) => [r, ROLE_LABEL[r]] as [string, string]);
   return (
     <div className="space-y-6">
-      <PageHeader title="Team" back={{ href: "/settings", label: "Settings" }} subtitle="People who sign in to this school. Tutors you schedule live under Settings, Tutors; link a tutor's login here and they see only their own lessons, students, and pay." />
+      <PageHeader title="Team" back={{ href: "/settings", label: "Office" }} subtitle="People who sign in to this school. Tutors you schedule live under Office, Tutors; link a tutor's login here and they see only their own lessons, students, and pay." />
       {owner && <Card title="Invite someone"><InviteForm roles={roles} /></Card>}
       <Card title={`Members (${members.length})`}>
         <ul className="divide-y divide-line" data-testid="members">

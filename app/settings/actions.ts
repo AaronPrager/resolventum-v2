@@ -25,13 +25,13 @@ async function membershipId(): Promise<string> {
 export async function enableFeedAction(_prev: FeedState, fd: FormData): Promise<FeedState> {
   const origin = str(fd, "origin");
   const raw = await issueFeedToken(prisma, await membershipId());
-  revalidatePath("/settings");
+  revalidatePath("/profile");
   return { url: `${origin}/api/calendar/${raw}.ics` };
 }
 
 export async function revokeFeedAction(): Promise<void> {
   await revokeFeedToken(prisma, await membershipId());
-  revalidatePath("/settings");
+  revalidatePath("/profile");
 }
 
 const ZONES = new Set(Intl.supportedValuesOf("timeZone"));

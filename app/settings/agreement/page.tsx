@@ -16,7 +16,7 @@ export default async function AgreementPage() {
   ]);
   return (
     <div className="space-y-6">
-      <PageHeader title="Tutoring agreement" back={{ href: "/settings", label: "Settings" }} subtitle="One wording for the school. Each student's copy fills in their name, parent, and price, with lines to sign." />
+      <PageHeader title="Tutoring agreement" back={{ href: "/settings", label: "Office" }} subtitle="One wording for the school. Each student's copy fills in their name, parent, and price, with lines to sign." />
       <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
         <Card title="Wording">
           <AgreementForm template={org.agreementTemplate ?? DEFAULT_AGREEMENT} canEdit={s.role === "OWNER"} />
