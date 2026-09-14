@@ -31,6 +31,9 @@ test("sign out ends the session", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/ })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).first().click();
   await expect(page).toHaveURL(/\/login$/);
+  // Signed out, the root is the front page, not the app.
   await page.goto("/");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: /Run your teaching practice/ })).toBeVisible();
+  await page.goto("/calendar");
+  await expect(page).toHaveURL(/\/login\?next=%2Fcalendar/);
 });
