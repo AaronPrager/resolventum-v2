@@ -56,7 +56,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await row.getByRole("link", { name: "Edit" }).click();
   await expect(page.getByRole("heading", { name: "Edit lesson" })).toBeVisible();
   await page.getByLabel("Price").fill("140");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByTestId("lesson-form").getByRole("button", { name: "Save", exact: true }).click();
   await expect(row).toContainText("$140.00");
 
   // Cancel it: the charge is voided and the credit is back.

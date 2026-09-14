@@ -1,6 +1,7 @@
 /**
- * Students, family accounts, parent contacts, and progress notes: the records
- * a school edits by hand. Money never moves here except when a student changes
+ * Students, family accounts, and parent contacts: the records a school edits
+ * by hand. (Progress notes were retired in favour of session notes; old rows
+ * stay readable on the student page.) Money never moves here except when a student changes
  * family, and then the rules are in moveStudent.
  */
 import type { PrismaClient } from "../../generated/prisma/client";
@@ -229,30 +230,4 @@ export async function removeGuardian(db: PrismaClient, organizationId: string, g
     const next = await db.guardian.findFirst({ where: { accountId: g.accountId }, orderBy: { createdAt: "asc" } });
     if (next) await db.guardian.update({ where: { id: next.id }, data: { isPrimary: true } });
   }
-}
-
-// ---------------------------------------------------------------- progress notes
-
-export async function addProgressNote(db: PrismaClient, organizationId: string, studentId: string, input: { notedOn: string; note: string; lessonId?: string | null }, createdById?: string | null) {
-  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
-  if (!student) throw new PeopleError("Student not found");
-  if (!isDate(input.notedOn)) throw new PeopleError("Date is required");
-  const note = input.note.trim();
-  if (!note) throw new PeopleError("Write the note first");
-  return db.progressNote.create({ data: { studentId, notedOn: new Date(`${input.notedOn}T00:00:00Z`), note, lessonId: input.lessonId ?? null, createdById: createdById ?? null } });
-}
-
-export async function updateProgressNote(db: PrismaClient, organizationId: string, noteId: string, input: { notedOn: string; note: string }) {
-  const n = await db.progressNote.findFirst({ where: { id: noteId, student: { organizationId } } });
-  if (!n) throw new PeopleError("Note not found");
-  if (!isDate(input.notedOn)) throw new PeopleError("Date is required");
-  const note = input.note.trim();
-  if (!note) throw new PeopleError("A note cannot be empty; delete it instead");
-  return db.progressNote.update({ where: { id: noteId }, data: { notedOn: new Date(`${input.notedOn}T00:00:00Z`), note } });
-}
-
-export async function deleteProgressNote(db: PrismaClient, organizationId: string, noteId: string) {
-  const n = await db.progressNote.findFirst({ where: { id: noteId, student: { organizationId } } });
-  if (!n) throw new PeopleError("Note not found");
-  await db.progressNote.delete({ where: { id: noteId } });
 }

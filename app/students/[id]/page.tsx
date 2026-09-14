@@ -10,11 +10,10 @@ import { studentChoices, studentDetail } from "@/src/services/students";
 import { accountBalances } from "@/src/services/balances";
 import { LessonForm } from "@/app/lessons/LessonForm";
 import { cancelLessonAction, createLessonAction, restoreLessonAction } from "@/app/lessons/actions";
-import { Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { Avatar, Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
-import { archiveStudentAction, deleteProgressNoteAction, unarchiveStudentAction } from "../actions";
-import { ProgressNoteForm } from "../forms";
+import { archiveStudentAction, unarchiveStudentAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +39,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const past = student.lessons.filter((l) => l.lesson.startsAt <= now);
   const nextSlot = new Date(now.getTime() + 24 * 3600 * 1000);
   const scheduledSolo = upcoming.filter((l) => l.lesson.status === "SCHEDULED").length;
-  const hasNotes = student.lastStopNote || student.nextStartNote || student.difficulties || student.notes;
+  const hasNotes = student.difficulties || student.notes;
 
   return (
     <div className="space-y-6">
@@ -96,8 +95,6 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
       {hasNotes && (
         <Card title="Notes">
           <div className="space-y-1 text-sm">
-            {student.lastStopNote && <p><span className="text-muted">Stopped at: </span>{student.lastStopNote}</p>}
-            {student.nextStartNote && <p><span className="text-muted">Start next: </span>{student.nextStartNote}</p>}
             {student.difficulties && <p><span className="text-muted">Difficulties: </span>{student.difficulties}</p>}
             {student.notes && <p className="whitespace-pre-line">{student.notes}</p>}
           </div>
@@ -151,33 +148,22 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
         )}
       </Card>
 
-      <Card title="Progress notes" actions={<span className="text-xs text-muted">Where you stopped and where to start next</span>}>
-        <div className="space-y-4">
-          <ProgressNoteForm studentId={student.id} today={localDateStr(now, tz)} />
-          {student.progressNotes.length === 0 ? <p className="text-sm text-muted">No notes yet.</p> : (
-            <ul className="divide-y divide-line" data-testid="progress-notes">
-              {student.progressNotes.map((n) => (
-                <li key={n.id} className="py-2.5">
-                  <details className="group">
-                    <summary className="flex cursor-pointer list-none items-start gap-3 text-sm [&::-webkit-details-marker]:hidden">
-                      <span className="w-24 shrink-0 tabular-nums text-muted">{formatDate(n.notedOn)}</span>
-                      <span className="min-w-0 flex-1 whitespace-pre-line">{n.note}</span>
-                      <Pencil className="mt-0.5 size-3.5 shrink-0 text-faint opacity-0 group-hover:opacity-100" aria-label="Edit note" />
-                    </summary>
-                    <div className="mt-2 flex items-start gap-2 pl-0 sm:pl-27">
-                      <div className="flex-1"><ProgressNoteForm studentId={student.id} today={localDateStr(now, tz)} note={{ id: n.id, notedOn: n.notedOn.toISOString().slice(0, 10), note: n.note }} /></div>
-                      <ConfirmForm action={deleteProgressNoteAction} message="Delete this note?">
-                        <input type="hidden" name="noteId" value={n.id} /><input type="hidden" name="studentId" value={student.id} />
-                        <Button variant="ghost" aria-label="Delete note" title="Delete note"><X aria-hidden /></Button>
-                      </ConfirmForm>
-                    </div>
-                  </details>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Card>
+      {student.progressNotes.length > 0 && (
+        <details className="rounded-2xl border border-line bg-surface shadow-sm [&[open]>summary]:border-b [&[open]>summary]:border-line">
+          <summary className="cursor-pointer list-none px-4 py-3 text-[15px] font-semibold sm:px-5 [&::-webkit-details-marker]:hidden">
+            Older progress notes ({student.progressNotes.length})
+            <span className="ml-2 text-[13px] font-normal text-muted">From before session notes. Read only.</span>
+          </summary>
+          <ul className="divide-y divide-line px-4 sm:px-5" data-testid="progress-notes">
+            {student.progressNotes.map((n) => (
+              <li key={n.id} className="flex gap-3 py-2.5 text-sm">
+                <span className="w-24 shrink-0 tabular-nums text-muted">{formatDate(n.notedOn)}</span>
+                <span className="min-w-0 flex-1 whitespace-pre-line">{n.note}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {student.assignments.length > 0 && (
         <Card title="Homework">

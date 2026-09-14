@@ -49,6 +49,7 @@ export async function draftParentReport(db: PrismaClient, studentId: string, opt
       account: { include: { guardians: { where: { isPrimary: true }, take: 1 } } },
       lessons: { where: { lesson: { startsAt: { gte: opts.from, lte: opts.to }, deletedAt: null } }, include: { lesson: true }, orderBy: { lesson: { startsAt: "asc" } } },
       progressNotes: { where: { notedOn: { gte: opts.from, lte: opts.to } }, orderBy: { notedOn: "asc" } },
+      sessionNotes: { where: { lesson: { startsAt: { gte: opts.from, lte: opts.to }, deletedAt: null } }, include: { lesson: { select: { startsAt: true, subject: true } } }, orderBy: { lesson: { startsAt: "asc" } } },
       assignments: { where: { createdAt: { gte: opts.from } }, include: { submissions: { include: { feedback: true } } }, orderBy: { createdAt: "asc" } },
       masteries: { orderBy: { notedAt: "desc" } },
     },
@@ -66,15 +67,14 @@ export async function draftParentReport(db: PrismaClient, studentId: string, opt
     `Lessons in the period (${lessons.length}):`,
     ...lessons.map((s) => `- ${localDateStr(s.lesson.startsAt, tz)} ${localTimeStr(s.lesson.startsAt, tz)}, ${s.lesson.durationMin} min, ${s.lesson.subject}${s.academicNotes ? `. Notes: ${s.academicNotes}` : ""}${s.lesson.notes ? `. ${s.lesson.notes}` : ""}`),
     "",
-    `Progress notes (${student.progressNotes.length}):`,
-    ...student.progressNotes.map((n) => `- ${dateOnlyStr(n.notedOn)}: ${n.note}`),
+    `Session notes (${student.sessionNotes.length}):`,
+    ...student.sessionNotes.map((n) => `- ${localDateStr(n.lesson.startsAt, tz)} ${n.lesson.subject}: covered ${n.covered}${n.win ? `. Win: ${n.win}` : ""}${n.struggle ? `. Struggle: ${n.struggle}` : ""}${n.homework ? `. Homework: ${n.homework}` : ""}${n.engagement ? `. Engagement ${n.engagement}/5` : ""}${n.nextGoal ? `. Next: ${n.nextGoal}` : ""}`),
+    ...(student.progressNotes.length ? ["", `Older progress notes (${student.progressNotes.length}):`, ...student.progressNotes.map((n) => `- ${dateOnlyStr(n.notedOn)}: ${n.note}`)] : []),
     "",
     `Homework (${student.assignments.length}):`,
     ...student.assignments.map((a) => `- ${a.title}: ${a.status.toLowerCase()}${a.submissions.length ? `, ${a.submissions.length} submitted` : ""}${a.submissions.some((s) => s.feedback?.comment) ? `. Feedback: ${a.submissions.map((s) => s.feedback?.comment).filter(Boolean).join(" ")}` : ""}`),
     "",
     student.masteries.length ? `Mastery (1 to 5): ${student.masteries.map((m) => `${m.topic} ${m.score}`).join(", ")}` : "",
-    student.lastStopNote ? `Where we stopped: ${student.lastStopNote}` : "",
-    student.nextStartNote ? `Next: ${student.nextStartNote}` : "",
   ].filter((l) => l !== "");
 
   const system = [

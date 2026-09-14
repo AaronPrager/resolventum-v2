@@ -31,10 +31,17 @@ const officeAudit: Item = { href: "/settings/audit", label: "Audit", icon: Histo
 /** The school's settings, with its four sub-pages listed underneath in the sidebar. */
 const office: Item = { href: "/settings", label: "Office", icon: Building2, match: (p) => p.startsWith("/settings"), children: [officeTutors, officeTeam, officeAgreement, officeAudit] };
 
-/** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages and no office. The profile opens from the person's name. */
+/** The money pages as one group, like Teaching and Office. */
+const money: Item = { href: "/accounts", label: "Money", icon: Wallet, match: (p) => p.startsWith("/accounts") || p.startsWith("/payments") || p.startsWith("/expenses") || p.startsWith("/reports"), children: [accounts, payments, expenses, reports] };
+
+/**
+ * One list per role, top to bottom, with three groups that fold the same way.
+ * A tutor sees their own calendar, students, teaching, and pay; no money and
+ * no office. The profile opens from the person's name.
+ */
 function menus(role: string) {
-  if (role === "TUTOR") return { teach: [calendar, students, teaching, emails], money: [earnings], foot: [] as Item[], bar: [calendar, students, notes, earnings], more: [homework, library, emails] };
-  return { teach: [home, calendar, students, leads, teaching, emails], money: [accounts, payments, expenses, reports], foot: [office], bar: [home, calendar, students, accounts], more: [leads, notes, homework, library, emails, payments, expenses, reports, office, ...office.children!] };
+  if (role === "TUTOR") return { items: [calendar, students, teaching, emails, earnings], bar: [calendar, students, notes, earnings], more: [homework, library, emails] };
+  return { items: [home, calendar, students, leads, teaching, emails, money, office], bar: [home, calendar, students, accounts], more: [leads, notes, homework, library, emails, payments, expenses, reports, office, ...office.children!] };
 }
 
 function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; collapsed?: boolean; sub?: boolean }) {
@@ -106,15 +113,10 @@ function NavGroup({ it, path, collapsed }: { it: Item; path: string; collapsed?:
 /** The desktop menu. Folded, it is icons only with the name as a tooltip; the Money heading becomes a rule. */
 export function SideNav({ role, collapsed }: { role: string; collapsed?: boolean }) {
   const path = usePathname();
-  const { teach, money, foot } = menus(role);
+  const { items } = menus(role);
   return (
-    <nav className="flex flex-1 flex-col gap-5" aria-label="Main">
-      <div className="flex flex-col gap-0.5">{teach.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}</div>
-      <div className="flex flex-col gap-0.5">
-        {collapsed ? <div className="mx-2 mb-1 border-t border-line" aria-hidden /> : <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-faint">Money</div>}
-        {money.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}
-      </div>
-      {foot.length > 0 && <div className="mt-auto flex flex-col gap-0.5">{foot.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}</div>}
+    <nav className="flex flex-1 flex-col gap-0.5" aria-label="Main">
+      {items.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}
     </nav>
   );
 }

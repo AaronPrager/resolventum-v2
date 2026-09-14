@@ -542,7 +542,9 @@ async function main() {
   });
   const sp = await q<Record<string, any>>(`select * from "StudentProgress" where "studentId" = any($1::text[])`, [[...studentIds]]);
   for (const row of sp) {
-    await prisma.student.update({ where: { id: row.studentId }, data: { lastStopNote: row.lastLessonStop, nextStartNote: row.nextLessonStart } });
+    // v2 has no "where we stopped" fields; the v1 text lands as one dated progress note, readable on the student page.
+    const note = [row.lastLessonStop && `Stopped at: ${row.lastLessonStop}`, row.nextLessonStart && `Start next: ${row.nextLessonStart}`].filter(Boolean).join("\n");
+    if (note) await prisma.progressNote.create({ data: { studentId: row.studentId, notedOn: new Date((row.updatedAt ?? new Date()).toISOString().slice(0, 10) + "T00:00:00Z"), note } });
   }
   console.log(`progress notes: ${progress.length}`);
 

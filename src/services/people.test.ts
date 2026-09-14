@@ -4,8 +4,8 @@ import { prisma } from "../db";
 import { createLesson } from "./lessons";
 import { recordPayment } from "./payments";
 import {
-  PeopleError, addGuardian, addProgressNote, createStudent, deleteProgressNote, moveStudent, removeGuardian, updateAccount,
-  updateGuardian, updateProgressNote, updateStudent,
+  PeopleError, addGuardian, createStudent, moveStudent, removeGuardian, updateAccount,
+  updateGuardian, updateStudent,
 } from "./people";
 
 const TAG = `Peopletest${Date.now()}`;
@@ -117,15 +117,3 @@ describe("accounts and contacts", () => {
   });
 });
 
-describe("progress notes", () => {
-  it("adds, edits, and deletes", async () => {
-    const anne = await prisma.student.findFirstOrThrow({ where: { firstName: "Anne", lastName: TAG } });
-    const n = await addProgressNote(prisma, orgId, anne.id, { notedOn: "2026-09-10", note: "Stopped at problem 4" });
-    await updateProgressNote(prisma, orgId, n.id, { notedOn: "2026-09-11", note: "Stopped at problem 6" });
-    expect((await prisma.progressNote.findUniqueOrThrow({ where: { id: n.id } })).note).toBe("Stopped at problem 6");
-    await expect(addProgressNote(prisma, orgId, anne.id, { notedOn: "2026-09-10", note: "  " })).rejects.toThrow(/note/);
-    await expect(deleteProgressNote(prisma, "other-org", n.id)).rejects.toThrow(PeopleError);
-    await deleteProgressNote(prisma, orgId, n.id);
-    expect(await prisma.progressNote.count({ where: { id: n.id } })).toBe(0);
-  });
-});

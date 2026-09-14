@@ -334,10 +334,6 @@ model Student {
   defaultPriceCents Int?
   difficulties      String?
   notes             String?
-  /// v1 StudentProgress.lastLessonStop
-  lastStopNote      String?
-  /// v1 StudentProgress.nextLessonStart
-  nextStartNote     String?
   status            StudentStatus @default(ACTIVE)
   /// Archived = dormant: out of the pickers and the default list. Independent of status.
   archivedAt        DateTime?

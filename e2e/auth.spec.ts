@@ -28,7 +28,7 @@ test("sign out ends the session", async ({ page }) => {
   await page.getByLabel("Email").fill(E2E_EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Good (morning|afternoon)$/ })).toBeVisible(); // signed in lands on the dashboard
   await page.getByRole("button", { name: "Sign out" }).first().click();
   // Signed out lands on the front page, not the app.
   await expect(page).toHaveURL(/\/$/);

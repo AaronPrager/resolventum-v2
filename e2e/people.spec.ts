@@ -1,4 +1,4 @@
-/** Adding and editing students, families, contacts, and progress notes through the screens. Cleans up. */
+/** Adding and editing students, families, and contacts through the screens. Cleans up. */
 import { expect, test } from "@playwright/test";
 import { prisma } from "../src/db";
 
@@ -41,19 +41,6 @@ test("add a student with a parent, edit, note, sibling, contact, and move", asyn
   await page.getByTestId("student-form").getByLabel("School").fill("Oak Hill Middle");
   await page.getByTestId("student-form").getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Grade 8 · Oak Hill Middle · Algebra 1")).toBeVisible();
-
-  // Progress note: add, then edit.
-  const noteForm = page.getByTestId("note-form");
-  await noteForm.getByLabel("Note").fill("Stopped at linear equations, problem 12");
-  await noteForm.getByRole("button", { name: "Add note" }).click();
-  const notes = page.getByTestId("progress-notes");
-  await expect(notes).toContainText("Stopped at linear equations, problem 12");
-  await expect(noteForm.getByLabel("Note")).toHaveValue("");
-  await notes.locator("summary").first().click();
-  const edit = notes.locator("form").first();
-  await edit.getByLabel("Note").fill("Stopped at problem 14");
-  await edit.getByRole("button", { name: "Save" }).click();
-  await expect(notes).toContainText("Stopped at problem 14");
 
   // Sibling into the same family.
   await page.goto("/students/new");

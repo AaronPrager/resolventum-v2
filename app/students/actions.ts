@@ -7,9 +7,7 @@ import { RoleError, requireWriter } from "@/src/auth/current";
 import { localDateOnly } from "@/src/lib/tz";
 import { archiveStudent, setStudentStatus, unarchiveStudent } from "@/src/services/students";
 import { auditAs } from "@/src/services/audit";
-import {
-  PeopleError, type StudentInput, addProgressNote, createStudent, deleteProgressNote, moveStudent, updateProgressNote, updateStudent,
-} from "@/src/services/people";
+import { PeopleError, type StudentInput, createStudent, moveStudent, updateStudent } from "@/src/services/people";
 
 export interface ActionState { error?: string; ok?: string }
 
@@ -97,28 +95,7 @@ export async function moveStudentAction(_p: ActionState, fd: FormData): Promise<
   redirect(`/students/${id}`);
 }
 
-export async function saveProgressNoteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
-  const studentId = str(fd, "studentId");
-  const noteId = str(fd, "noteId");
-  try {
-    const session = await requireWriter();
-    const input = { notedOn: str(fd, "notedOn"), note: str(fd, "note") };
-    if (noteId) await updateProgressNote(prisma, session.organizationId, noteId, input);
-    else await addProgressNote(prisma, session.organizationId, studentId, input, session.userId);
-  } catch (e) {
-    const m = known(e);
-    if (m) return { error: m };
-    throw e;
-  }
-  revalidatePath(`/students/${studentId}`);
-  return { ok: noteId ? "Saved" : "Note added" };
-}
 
-export async function deleteProgressNoteAction(fd: FormData): Promise<void> {
-  const session = await requireWriter();
-  await deleteProgressNote(prisma, session.organizationId, str(fd, "noteId"));
-  revalidatePath(`/students/${str(fd, "studentId")}`);
-}
 
 export async function archiveStudentAction(fd: FormData) {
   const session = await requireWriter();

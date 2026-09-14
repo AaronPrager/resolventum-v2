@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button, Field, FormError, FormOk, Input, Radio, Select, Textarea } from "@/src/components/ui";
-import { type ActionState, createStudentAction, moveStudentAction, saveProgressNoteAction, updateStudentAction } from "./actions";
+import { Button, Field, FormError, Input, Radio, Select, Textarea } from "@/src/components/ui";
+import { type ActionState, createStudentAction, moveStudentAction, updateStudentAction } from "./actions";
 
 export interface StudentValues {
   firstName: string;
@@ -134,28 +134,3 @@ export function MoveStudentForm({ studentId, currentAccountName, accounts, alone
   );
 }
 
-export function ProgressNoteForm({ studentId, today, note }: { studentId: string; today: string; note?: { id: string; notedOn: string; note: string } }) {
-  const [state, action, pending] = useActionState(saveProgressNoteAction, {} as ActionState);
-  const [key, setKey] = useState(0);
-  return (
-    <form
-      key={key}
-      action={async (fd) => {
-        await action(fd);
-        if (!note) setKey((k) => k + 1); // clear the new-note box after adding
-      }}
-      className="space-y-2"
-      data-testid={note ? `note-form-${note.id}` : "note-form"}
-    >
-      <input type="hidden" name="studentId" value={studentId} />
-      {note && <input type="hidden" name="noteId" value={note.id} />}
-      <div className="grid gap-2 sm:grid-cols-[10rem_1fr_auto] sm:items-start">
-        <Input type="date" name="notedOn" defaultValue={note?.notedOn ?? today} aria-label="Date" required />
-        <Textarea name="note" rows={note ? 2 : 1} defaultValue={note?.note ?? ""} placeholder="Where you stopped, what to start with next time" aria-label="Note" required />
-        <Button type="submit" variant={note ? "secondary" : "primary"} disabled={pending}>{pending ? "Saving" : note ? "Save" : "Add note"}</Button>
-      </div>
-      <FormError>{state.error}</FormError>
-      {note && <FormOk>{state.ok}</FormOk>}
-    </form>
-  );
-}
