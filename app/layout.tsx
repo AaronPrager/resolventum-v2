@@ -8,6 +8,7 @@ import { Logo } from "./Logo";
 import { Sidebar } from "./Sidebar";
 import { SIDEBAR_COOKIE } from "@/src/auth/constants";
 import { currentSession, devAutoLogin } from "@/src/auth/current";
+import { Avatar } from "@/src/components/ui";
 import { logoutAction } from "./login/actions";
 import "./globals.css";
 
@@ -42,11 +43,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="min-w-0 flex-1">
             <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-surface/90 px-4 backdrop-blur md:hidden">
               <Link href="/"><Logo /></Link>
-              <form action={logoutAction}>
-                <button aria-label="Sign out" className="inline-flex size-9 items-center justify-center rounded-lg text-muted hover:bg-surface-3">
-                  <LogOut className="size-[18px]" aria-hidden />
-                </button>
-              </form>
+              <div className="flex items-center gap-1">
+                <Link href="/profile" aria-label={`${who}, profile`} title="Open your profile" className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-surface-3"><Avatar name={who} /></Link>
+                <form action={logoutAction}>
+                  <button aria-label="Sign out" className="inline-flex size-9 items-center justify-center rounded-lg text-muted hover:bg-surface-3">
+                    <LogOut className="size-[18px]" aria-hidden />
+                  </button>
+                </form>
+              </div>
             </header>
             <main className="mx-auto max-w-[76rem] px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8">{children}</main>
           </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, Building2, CalendarDays, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, Receipt, UserPlus, UserRound, Users, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, Building2, CalendarDays, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
 interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean; children?: Item[] }
@@ -20,7 +20,6 @@ const payments: Item = { href: "/payments", label: "Payments", icon: CreditCard,
 const expenses: Item = { href: "/expenses", label: "Expenses", icon: Receipt, match: (p) => p.startsWith("/expenses") };
 const reports: Item = { href: "/reports", label: "Reports", icon: BarChart3, match: (p) => p.startsWith("/reports") };
 const earnings: Item = { href: "/earnings", label: "My pay", icon: HandCoins, match: (p) => p.startsWith("/earnings") };
-const profile: Item = { href: "/profile", label: "Profile", icon: UserRound, match: (p) => p.startsWith("/profile") };
 const officeTutors: Item = { href: "/settings/tutors", label: "Tutors", icon: GraduationCap, match: (p) => p.startsWith("/settings/tutors") };
 const officeTeam: Item = { href: "/settings/team", label: "Team", icon: Users, match: (p) => p.startsWith("/settings/team") };
 const officeAgreement: Item = { href: "/settings/agreement", label: "Agreement", icon: FileSignature, match: (p) => p.startsWith("/settings/agreement") };
@@ -28,10 +27,10 @@ const officeAudit: Item = { href: "/settings/audit", label: "Audit", icon: Histo
 /** The school's settings, with its four sub-pages listed underneath in the sidebar. */
 const office: Item = { href: "/settings", label: "Office", icon: Building2, match: (p) => p.startsWith("/settings"), children: [officeTutors, officeTeam, officeAgreement, officeAudit] };
 
-/** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages and no office. */
+/** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages and no office. The profile opens from the person's name. */
 function menus(role: string) {
-  if (role === "TUTOR") return { teach: [calendar, students, homework, emails], money: [earnings], foot: [profile], bar: [calendar, students, homework, earnings], more: [emails, profile] };
-  return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], foot: [profile, office], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, profile, office, ...office.children!] };
+  if (role === "TUTOR") return { teach: [calendar, students, homework, emails], money: [earnings], foot: [] as Item[], bar: [calendar, students, homework, earnings], more: [emails] };
+  return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], foot: [office], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, office, ...office.children!] };
 }
 
 function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; collapsed?: boolean; sub?: boolean }) {
@@ -74,7 +73,7 @@ export function SideNav({ role, collapsed }: { role: string; collapsed?: boolean
         {collapsed ? <div className="mx-2 mb-1 border-t border-line" aria-hidden /> : <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-faint">Money</div>}
         {money.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}
       </div>
-      <div className="mt-auto flex flex-col gap-0.5">{foot.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}</div>
+      {foot.length > 0 && <div className="mt-auto flex flex-col gap-0.5">{foot.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}</div>}
     </nav>
   );
 }

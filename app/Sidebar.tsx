@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Logo } from "./Logo";
 import { SideNav } from "./Nav";
@@ -23,6 +24,7 @@ export function Sidebar({ initialCollapsed, role, organizationName, who, dev, lo
   logout: () => Promise<void>;
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const onProfile = usePathname().startsWith("/profile");
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
@@ -41,14 +43,23 @@ export function Sidebar({ initialCollapsed, role, organizationName, who, dev, lo
         )}
       </div>
       <div className={`flex flex-1 flex-col overflow-y-auto pb-3 ${collapsed ? "px-2" : "px-3"}`}><SideNav role={role} collapsed={collapsed} /></div>
-      <div className={`border-t border-line ${collapsed ? "flex flex-col items-center gap-1 px-2 py-3" : "flex items-center gap-2.5 px-4 py-3"}`}>
-        <span title={collapsed ? `${who} · ${role.toLowerCase()}` : undefined}><Avatar name={who} /></span>
-        {!collapsed && (
-          <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] font-medium">{who}</div>
-            <div className="truncate text-xs text-muted">{role.toLowerCase()}{dev && <span className="ml-1.5 rounded bg-warn-soft px-1 py-px text-[10px] font-medium text-warn" title="Signed in automatically because DEV_AUTO_LOGIN is set">dev</span>}</div>
-          </div>
-        )}
+      <div className={`border-t border-line ${collapsed ? "flex flex-col items-center gap-1 px-2 py-3" : "flex items-center gap-1.5 px-2 py-2"}`}>
+        {/* The person's name opens their profile: password, calendar feed, and who they teach as. */}
+        <Link
+          href="/profile"
+          aria-current={onProfile ? "page" : undefined}
+          aria-label={collapsed ? `${who}, profile` : undefined}
+          title={collapsed ? `${who} · ${role.toLowerCase()} · open profile` : "Open your profile"}
+          className={`flex min-w-0 items-center gap-2.5 rounded-lg transition-colors ${collapsed ? "p-1" : "flex-1 px-2 py-1"} ${onProfile ? "bg-surface shadow-xs ring-1 ring-line" : "hover:bg-surface-3/70"}`}
+        >
+          <Avatar name={who} />
+          {!collapsed && (
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-[13px] font-medium">{who}</span>
+              <span className="block truncate text-xs text-muted">{role.toLowerCase()}{dev && <span className="ml-1.5 rounded bg-warn-soft px-1 py-px text-[10px] font-medium text-warn" title="Signed in automatically because DEV_AUTO_LOGIN is set">dev</span>}</span>
+            </span>
+          )}
+        </Link>
         <form action={logout}>
           <IconButton label="Sign out"><LogOut className="size-4" aria-hidden /></IconButton>
         </form>
