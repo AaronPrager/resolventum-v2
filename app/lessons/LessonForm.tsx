@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button, Checkbox, Field, FormError, Input, Radio, Select, Textarea } from "@/src/components/ui";
 import type { ActionState } from "./actions";
 
@@ -15,12 +15,15 @@ export interface LessonFormValues {
   meetingLink: string;
   notes: string;
   category: "" | "TUTORING" | "COLLEGE_COUNSELING";
+  allDay?: boolean;
 }
 
-export function LessonForm({ action, studentId, students, lessonId, inSeries, tutors, initial, submitLabel, allowRepeat, returnTo }: {
+export function LessonForm({ action, studentId, students, noStudent, lessonId, inSeries, tutors, initial, submitLabel, allowRepeat, returnTo }: {
   action: (prev: ActionState, fd: FormData) => Promise<ActionState>;
   studentId?: string;
   students?: { id: string; name: string }[];
+  /** Editing an event that has no student. */
+  noStudent?: boolean;
   lessonId?: string;
   inSeries?: boolean;
   tutors: { id: string; name: string }[];
@@ -30,6 +33,8 @@ export function LessonForm({ action, studentId, students, lessonId, inSeries, tu
   returnTo?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const [allDay, setAllDay] = useState(!!initial.allDay);
+  const [withStudent, setWithStudent] = useState(!noStudent);
   return (
     <form action={formAction} className="space-y-4" data-testid="lesson-form">
       {studentId && <input type="hidden" name="studentId" value={studentId} />}
@@ -37,24 +42,30 @@ export function LessonForm({ action, studentId, students, lessonId, inSeries, tu
       {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       {students && (
         <Field label="Student" className="max-w-sm">
-          <Select name="studentId" defaultValue="" required>
+          <Select name="studentId" defaultValue="" required onChange={(e) => setWithStudent(e.target.value !== "none")}>
             <option value="" disabled>Pick a student</option>
             {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="none">No student (an event)</option>
           </Select>
         </Field>
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Date"><Input type="date" name="date" defaultValue={initial.date} required /></Field>
-        <Field label="Time"><Input type="time" name="time" defaultValue={initial.time} required /></Field>
-        <Field label="Minutes"><Input type="number" name="durationMin" min={1} max={1440} defaultValue={initial.durationMin} required /></Field>
-        <Field label="Price"><Input type="text" inputMode="decimal" name="price" defaultValue={initial.price} required /></Field>
-        <Field label="Subject" className="col-span-2"><Input type="text" name="subject" defaultValue={initial.subject} required /></Field>
+        <Field label="Time"><Input type="time" name="time" defaultValue={initial.time} required={!allDay} disabled={allDay} /></Field>
+        <Field label="Minutes"><Input type="number" name="durationMin" min={1} max={1440} defaultValue={initial.durationMin} required={!allDay} disabled={allDay} /></Field>
+        {withStudent ? (
+          <Field label="Price"><Input type="text" inputMode="decimal" name="price" defaultValue={initial.price} required /></Field>
+        ) : (
+          <div className="flex items-end pb-2 text-sm text-muted">No charge</div>
+        )}
+        <Field label={withStudent ? "Subject" : "Title"} className="col-span-2"><Input type="text" name="subject" defaultValue={initial.subject} required /></Field>
         <Field label="Tutor"><Select name="tutorId" defaultValue={initial.tutorId}><option value="">None</option>{tutors.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
         <Field label="Where"><Select name="locationType" defaultValue={initial.locationType}><option value="IN_PERSON">In person</option><option value="REMOTE">Remote</option></Select></Field>
         <Field label="Category"><Select name="category" defaultValue={initial.category}><option value="">None</option><option value="TUTORING">Tutoring</option><option value="COLLEGE_COUNSELING">College counseling</option></Select></Field>
         <Field label="Meeting link" className="col-span-2 sm:col-span-3"><Input type="url" name="meetingLink" defaultValue={initial.meetingLink} /></Field>
         <Field label="Notes" className="col-span-full"><Textarea name="notes" rows={2} defaultValue={initial.notes} /></Field>
       </div>
+      <Checkbox name="allDay" label="All day" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
       {allowRepeat && (
         <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-surface-2 px-3 py-2 text-sm">
           <Checkbox name="repeat" label="Repeat every" />

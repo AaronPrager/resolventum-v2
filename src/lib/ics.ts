@@ -12,6 +12,8 @@ export interface IcsEvent {
   location?: string;
   url?: string;
   cancelled?: boolean;
+  /** Whole days: start and end are midnights, end exclusive, and only the dates go out. */
+  allDay?: boolean;
   /** Last change, for SEQUENCE and LAST-MODIFIED. */
   updatedAt?: Date;
 }
@@ -58,8 +60,13 @@ export function buildIcs(opts: { name: string; events: IcsEvent[]; now?: Date; p
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:${e.uid}`);
     lines.push(`DTSTAMP:${icsDate(now)}`);
-    lines.push(`DTSTART:${icsDate(e.start)}`);
-    lines.push(`DTEND:${icsDate(e.end)}`);
+    if (e.allDay) {
+      lines.push(`DTSTART;VALUE=DATE:${icsDate(e.start).slice(0, 8)}`);
+      lines.push(`DTEND;VALUE=DATE:${icsDate(e.end).slice(0, 8)}`);
+    } else {
+      lines.push(`DTSTART:${icsDate(e.start)}`);
+      lines.push(`DTEND:${icsDate(e.end)}`);
+    }
     lines.push(`SUMMARY:${icsText(e.cancelled ? `Cancelled: ${e.summary}` : e.summary)}`);
     if (e.description) lines.push(`DESCRIPTION:${icsText(e.description)}`);
     if (e.location) lines.push(`LOCATION:${icsText(e.location)}`);

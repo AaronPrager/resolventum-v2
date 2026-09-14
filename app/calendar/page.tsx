@@ -131,11 +131,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           style={cancelled ? { borderLeftColor: "var(--line)" } : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
                         >
                           <div className="w-28 shrink-0 tabular-nums">
-                            <div className="font-semibold">{formatTime(l.startsAt, tz)}</div>
-                            <div className="text-xs text-muted">to {formatTime(l.endsAt, tz)} · {l.durationMin} min</div>
+                            <div className="font-semibold">{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</div>
+                            {!l.allDay && <div className="text-xs text-muted">to {formatTime(l.endsAt, tz)} · {l.durationMin} min</div>}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="font-medium">{l.students.map((s) => s.name).join(", ") || "No student"}</div>
+                            <div className="font-medium">{l.students.map((s) => s.name).join(", ") || l.subject}</div>
                             <div className="text-sm text-muted">
                               {[l.subject, l.locationType === "REMOTE" ? "remote" : "in person", l.seriesId ? "weekly" : null, !grouped && l.tutor ? l.tutor.name : null].filter(Boolean).join(" · ")}
                             </div>
@@ -210,17 +210,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     <ul className="space-y-0.5">
                       {items.map((l) => {
                         const cancelled = l.status === "CANCELLED";
-                        const names = l.students.map((s) => s.name.split(" ")[0]).join(", ") || "No student";
-                        const full = l.students.map((s) => s.name).join(", ") || "No student";
+                        const names = l.students.map((s) => s.name.split(" ")[0]).join(", ") || l.subject || "Event";
+                        const full = l.students.map((s) => s.name).join(", ") || l.subject || "Event";
                         return (
                           <li key={l.id}>
                             <Link
                               href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
-                              title={`${formatTime(l.startsAt, tz)} ${full}${l.subject ? ` · ${l.subject}` : ""}${l.tutor ? ` · ${l.tutor.name}` : ""}${cancelled ? " (cancelled)" : ""}`}
+                              title={`${l.allDay ? "All day" : formatTime(l.startsAt, tz)} ${full}${l.subject ? ` · ${l.subject}` : ""}${l.tutor ? ` · ${l.tutor.name}` : ""}${cancelled ? " (cancelled)" : ""}`}
                               className={`block truncate rounded border-l-2 px-1 py-0.5 text-[11px] leading-tight hover:bg-surface-3 ${cancelled ? "border-line text-muted line-through" : "bg-surface-2"}`}
                               style={cancelled ? undefined : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
                             >
-                              <span className="tabular-nums text-muted">{shortTime(l.startsAt, tz)}</span> {names}
+                              <span className="tabular-nums text-muted">{l.allDay ? "" : shortTime(l.startsAt, tz)}</span> {names}
                             </Link>
                           </li>
                         );
@@ -283,8 +283,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         className={`block rounded-md border-l-4 px-2 py-1.5 text-xs leading-snug hover:bg-surface-3 ${cancelled ? "border-line bg-surface-2 text-muted line-through" : "bg-surface-2"}`}
                         style={cancelled ? undefined : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
                       >
-                        <div className="flex items-baseline justify-between gap-1 font-semibold tabular-nums"><span>{formatTime(l.startsAt, tz)}</span><span className="font-normal text-muted">{l.durationMin} min</span></div>
-                        <div className="font-medium">{l.students.map((s) => s.name).join(", ") || "No student"}</div>
+                        <div className="flex items-baseline justify-between gap-1 font-semibold tabular-nums"><span>{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</span>{!l.allDay && <span className="font-normal text-muted">{l.durationMin} min</span>}</div>
+                        <div className="font-medium">{l.students.map((s) => s.name).join(", ") || l.subject}</div>
                         <div className="text-muted">{[l.subject, l.locationType === "REMOTE" ? "remote" : null, l.seriesId ? "weekly" : null, !tutor && l.tutor ? l.tutor.name : null].filter(Boolean).join(" · ")}</div>
                       </Link>
                     </li>

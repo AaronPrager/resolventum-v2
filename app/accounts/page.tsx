@@ -38,10 +38,10 @@ export default async function Home() {
           <ul className="divide-y divide-line" data-testid="today">
             {todays.map((l) => (
               <li key={l.id} className={`flex items-center gap-3 py-2 text-sm ${l.status === "CANCELLED" ? "text-muted line-through" : ""}`}>
-                <span className="w-20 shrink-0 tabular-nums">{formatTime(l.startsAt, tz)}</span>
-                <Link href={`/lessons/${l.id}`} className="font-medium text-brand hover:underline">{l.students.map((s) => s.name).join(", ") || "No student"}</Link>
+                <span className="w-20 shrink-0 tabular-nums">{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</span>
+                <Link href={`/lessons/${l.id}`} className="font-medium text-brand hover:underline">{l.students.map((s) => s.name).join(", ") || l.subject}</Link>
                 <span className="truncate text-muted">{l.subject}</span>
-                <span className="ml-auto shrink-0 text-muted">{l.durationMin} min{l.locationType === "REMOTE" ? " · remote" : ""}</span>
+                <span className="ml-auto shrink-0 text-muted">{l.allDay ? "" : `${l.durationMin} min`}{l.locationType === "REMOTE" ? " · remote" : ""}</span>
               </li>
             ))}
           </ul>

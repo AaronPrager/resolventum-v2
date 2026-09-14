@@ -48,7 +48,7 @@ export async function feedForToken(db: PrismaClient, raw: string, now = new Date
   const events: IcsEvent[] = lessons.map((l) => {
     const names = l.students.map((s) => `${s.student.firstName} ${s.student.lastName}`).join(", ") || "No student";
     const desc = [
-      `${l.durationMin} min at ${formatTime(l.startsAt, org.timezone)}`,
+      l.allDay ? "All day" : `${l.durationMin} min at ${formatTime(l.startsAt, org.timezone)}`,
       l.tutor ? `Tutor: ${l.tutor.name}` : null,
       l.seriesId ? "Weekly series" : null,
       l.notes ?? null,
@@ -57,11 +57,12 @@ export async function feedForToken(db: PrismaClient, raw: string, now = new Date
       uid: `${l.id}@resolventum`,
       start: l.startsAt,
       end: new Date(l.startsAt.getTime() + l.durationMin * 60000),
-      summary: `${names}, ${l.subject}`,
+      summary: [l.students.length ? names : null, l.subject].filter(Boolean).join(", ") || "Lesson",
       description: desc,
       location: l.locationType === "REMOTE" ? "Remote" : undefined,
       url: l.meetingLink ?? undefined,
       cancelled: l.status === "CANCELLED",
+      allDay: l.allDay,
       updatedAt: l.updatedAt,
     };
   });

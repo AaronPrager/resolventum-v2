@@ -9,6 +9,7 @@ export interface CalendarLesson {
   startsAt: Date;
   endsAt: Date;
   durationMin: number;
+  allDay: boolean;
   subject: string;
   status: string;
   locationType: string;
@@ -33,6 +34,7 @@ export async function calendarLessons(prisma: PrismaClient, organizationId: stri
     startsAt: l.startsAt,
     endsAt: new Date(l.startsAt.getTime() + l.durationMin * 60000),
     durationMin: l.durationMin,
+    allDay: l.allDay,
     subject: l.subject,
     status: l.status,
     locationType: l.locationType,
