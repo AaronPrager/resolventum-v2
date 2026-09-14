@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Button, Field, FormError, FormOk, Input, Select } from "@/src/components/ui";
 import type { ActionState } from "./actions";
-import { recordAdjustmentAction, recordPaymentAction } from "./actions";
+import { recordAdjustmentAction, recordPaymentAction, updatePaymentAction } from "./actions";
 
 const METHODS: [string, string][] = [["ZELLE", "Zelle"], ["VENMO", "Venmo"], ["CASH", "Cash"], ["CHECK", "Check"], ["CARD", "Card"], ["BANK_TRANSFER", "Bank transfer"], ["OTHER", "Other"]];
 
@@ -48,6 +48,26 @@ export function AdjustmentForm({ accountId, today, students }: { accountId: stri
       <FormError>{state.error}</FormError>
       <FormOk>{state.ok}</FormOk>
       <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Saving" : "Record"}</Button>
+    </form>
+  );
+}
+
+export function PaymentEditForm({ payment, returnTo }: { payment: { id: string; refund: boolean; amount: string; paidOn: string; method: string; reference: string; notes: string; refundReason: string }; returnTo: string }) {
+  const [state, action, pending] = useActionState(updatePaymentAction, {} as ActionState);
+  return (
+    <form action={action} className="space-y-4" data-testid="payment-edit-form">
+      <input type="hidden" name="paymentId" value={payment.id} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Field label={payment.refund ? "Refund amount" : "Amount"}><Input type="text" inputMode="decimal" name="amount" defaultValue={payment.amount} required /></Field>
+        <Field label="Date"><Input type="date" name="paidOn" defaultValue={payment.paidOn} required /></Field>
+        <Field label="How"><Select name="method" defaultValue={payment.method}>{METHODS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</Select></Field>
+        <Field label="Reference"><Input type="text" name="reference" defaultValue={payment.reference} /></Field>
+        {payment.refund && <Field label="Reason for the refund" className="col-span-2"><Input type="text" name="refundReason" defaultValue={payment.refundReason} required /></Field>}
+        <Field label="Notes" className={payment.refund ? "col-span-2" : "col-span-full"}><Input type="text" name="notes" defaultValue={payment.notes} /></Field>
+      </div>
+      <FormError>{state.error}</FormError>
+      <Button type="submit" disabled={pending}>{pending ? "Saving" : "Save changes"}</Button>
     </form>
   );
 }

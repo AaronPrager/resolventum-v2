@@ -32,6 +32,7 @@ test("homework: library upload, assignment, student upload through the public li
   await expect(page.getByTestId("library")).toContainText("e2e-worksheet.pdf");
 
   await page.goto("/homework");
+  await page.getByText("New assignment", { exact: true }).click();
   const form = page.getByTestId("assignment-form");
   await form.getByLabel("Student").selectOption({ label: "Urman, Estella" });
   await form.getByLabel("Title").fill(`${TAG} worksheet`);
@@ -46,7 +47,7 @@ test("homework: library upload, assignment, student upload through the public li
   expect(link).toMatch(/\/h\/[A-Za-z0-9_-]+$/);
 
   // The student, with no session, sees the assignment and sends a photo.
-  const student = await browser.newContext();
+  const student = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const sp = await student.newPage();
   await sp.goto(link);
   await expect(sp.getByRole("heading", { name: `${TAG} worksheet` })).toBeVisible();
@@ -72,7 +73,7 @@ test("homework: library upload, assignment, student upload through the public li
   await expect(page.getByText("reviewed")).toBeVisible();
 
   // The student page now shows the feedback and stops accepting uploads.
-  const again = await browser.newContext();
+  const again = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const sp2 = await again.newPage();
   await sp2.goto(link);
   await expect(sp2.getByText("Great work. Check problem 4 again.")).toBeVisible();

@@ -8,7 +8,7 @@ import { formatDate, formatDay } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { assignmentDetail, effectiveStatus } from "@/src/services/homework";
 import { Badge, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Textarea } from "@/src/components/ui";
-import { deleteAssignmentAction, discardDraftAction, markAssignedAction } from "../actions";
+import { deleteAssignmentAction, discardDraftAction, markAssignedAction, toggleArchiveAction } from "../actions";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
 import { emailConfigured } from "@/src/email/send";
 import { EmailLink } from "./EmailLink";
@@ -35,10 +35,19 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={a.title}
         back={{ href: "/homework", label: "Homework" }}
-        subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Link href={`/students/${a.student.id}`} className="text-brand hover:underline">{a.student.firstName} {a.student.lastName}</Link><Badge tone={status === "REVIEWED" ? "credit" : status === "OVERDUE" ? "owed" : status === "SOLVED" ? "warn" : "brand"}>{status === "SOLVED" ? "to review" : status.toLowerCase()}</Badge>{a.dueOn && <span>due {formatDate(a.dueOn)}</span>}{a.lesson && <span>· from the lesson on {formatDay(a.lesson.startsAt, s.timezone)}</span>}</span>}
-        actions={a.submissions.length === 0 && (
-          <ConfirmForm action={deleteAssignmentAction} message="Delete this assignment? It has no submissions, so nothing else is lost."><input type="hidden" name="assignmentId" value={a.id} /><Button variant="danger">Delete</Button></ConfirmForm>
-        )}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Link href={`/students/${a.student.id}`} className="text-brand hover:underline">{a.student.firstName} {a.student.lastName}</Link><Badge tone={status === "REVIEWED" ? "credit" : status === "OVERDUE" ? "owed" : status === "SOLVED" ? "warn" : "brand"}>{status === "SOLVED" ? "to review" : status.toLowerCase()}</Badge>{a.archivedAt && <Badge>archived</Badge>}{a.dueOn && <span>due {formatDate(a.dueOn)}</span>}{a.lesson && <span>· from the lesson on {formatDay(a.lesson.startsAt, s.timezone)}</span>}</span>}
+        actions={
+          <>
+            <form action={toggleArchiveAction}>
+              <input type="hidden" name="assignmentId" value={a.id} />
+              <input type="hidden" name="archived" value={a.archivedAt ? "1" : "0"} />
+              <Button variant="secondary">{a.archivedAt ? "Unarchive" : "Archive"}</Button>
+            </form>
+            {a.submissions.length === 0 && (
+              <ConfirmForm action={deleteAssignmentAction} message="Delete this assignment? It has no submissions, so nothing else is lost."><input type="hidden" name="assignmentId" value={a.id} /><Button variant="danger">Delete</Button></ConfirmForm>
+            )}
+          </>
+        }
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

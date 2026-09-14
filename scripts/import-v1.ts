@@ -177,7 +177,8 @@ async function main() {
       venmoHandle: owner.venmo ?? null,
       zelleHandle: owner.zelle ?? null,
       onboardingCompletedAt: v1Org.onboardingCompletedAt ?? null,
-      studentIntakeEnabled: Boolean(v1Org.studentIntakeEnabled),
+      // v1 sign-up links do not carry over (different address, hashed code); the owner turns the new one on in Settings.
+      studentIntakeEnabled: false,
       createdAt: v1Org.createdAt,
     },
   });
@@ -455,7 +456,7 @@ async function main() {
       kind: "LESSON" as const,
       amountCents: cents(l.price),
       chargedOn: nyDate(l.dateTime),
-      description: `${l.subject}, ${l.duration} min`,
+      description: `${subjectFor(l) || "Lesson"}, ${l.duration} min`,
       createdAt: l.createdAt,
       updatedAt: l.updatedAt,
     });

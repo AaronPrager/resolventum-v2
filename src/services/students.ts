@@ -57,7 +57,7 @@ export async function studentDetail(prisma: PrismaClient, studentId: string) {
       organization: { select: { id: true, timezone: true } },
       account: { include: { guardians: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }] }, students: { where: { deletedAt: null } } } },
       progressNotes: { orderBy: { notedOn: "desc" }, take: 20 },
-      assignments: { orderBy: { createdAt: "desc" }, take: 10, include: { _count: { select: { submissions: true } } } },
+      assignments: { where: { archivedAt: null }, orderBy: { createdAt: "desc" }, take: 10, include: { _count: { select: { submissions: true } } } },
       lessons: {
         where: { lesson: { deletedAt: null } },
         include: { lesson: { include: { tutor: { select: { id: true, name: true, color: true } } } }, charge: { select: { amountCents: true, voidedAt: true } } },
@@ -113,4 +113,19 @@ export async function unarchiveStudent(db: PrismaClient, organizationId: string,
   const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
   if (!student) throw new StudentError("Student not found");
   await db.student.update({ where: { id: studentId }, data: { archivedAt: null } });
+}
+
+/** Students for the lesson form's pickers: active ones, last name first, with their usual price and subject. */
+export async function studentChoices(db: PrismaClient, organizationId: string, include: string[] = []) {
+  const rows = await db.student.findMany({
+    where: { organizationId, deletedAt: null, OR: [{ archivedAt: null }, { id: { in: include } }] },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    select: { id: true, firstName: true, lastName: true, defaultPriceCents: true, defaultSubject: true },
+  });
+  return rows.map((s) => ({
+    id: s.id,
+    name: `${s.lastName}, ${s.firstName}`,
+    defaultPrice: s.defaultPriceCents != null ? (s.defaultPriceCents / 100).toFixed(2) : "",
+    defaultSubject: s.defaultSubject ?? undefined,
+  }));
 }

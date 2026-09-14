@@ -40,6 +40,13 @@ export async function signOutAndClearCookie() {
 export class RoleError extends Error {}
 
 /** Accountants can read everything and change nothing. Owners and tutors can write. */
+/** Owners only: team, school settings, and anything that changes who can do what. */
+export async function requireOwner(): Promise<SessionUser> {
+  const s = await requireSession();
+  if (s.role !== "OWNER") throw new RoleError("Only an owner can do this.");
+  return s;
+}
+
 export async function requireWriter(): Promise<SessionUser> {
   const s = await requireSession();
   if (s.role === "ACCOUNTANT") throw new RoleError("Your role is read-only. Ask the owner to make changes.");

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
+import { studentChoices } from "@/src/services/students";
 import { requireSession } from "@/src/auth/current";
 import { localDateStr, localTimeStr } from "@/src/lib/format";
 import { LessonForm } from "../LessonForm";
@@ -17,23 +18,24 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
     where: { id },
     include: { organization: { select: { timezone: true } }, students: { include: { student: true } } },
   });
-  if (!lesson || lesson.deletedAt || lesson.students.length > 1 || lesson.organizationId !== session.organizationId) notFound();
-  const seat = lesson.students[0] ?? null; // null: an event with no student
+  if (!lesson || lesson.deletedAt || lesson.organizationId !== session.organizationId) notFound();
+  const seat = lesson.students[0] ?? null; // the first student, for the back link; null for an event
+  const group = lesson.students.length > 1;
+  const choices = await studentChoices(prisma, lesson.organizationId, lesson.students.map((s) => s.studentId));
   const tz = lesson.organization.timezone;
   const tutors = await prisma.tutor.findMany({ where: { organizationId: lesson.organizationId, archivedAt: null }, orderBy: { name: "asc" } });
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={seat ? "Edit lesson" : "Edit event"}
+        title={group ? "Edit group lesson" : seat ? "Edit lesson" : "Edit event"}
         back={{ href: returnTo ?? (seat ? `/students/${seat.studentId}` : "/calendar"), label: returnTo ? "Back" : seat ? `${seat.student.firstName} ${seat.student.lastName}` : "Calendar" }}
-        subtitle={<span className="inline-flex items-center gap-2"><Badge tone={lesson.status === "CANCELLED" ? "owed" : "brand"}>{lesson.status.toLowerCase()}</Badge>{lesson.seriesId && <span>Part of a weekly series.</span>}{seat ? <span>Changing the price or date changes the charge on the account.</span> : <span>No student, no charge.</span>}</span>}
+        subtitle={<span className="inline-flex items-center gap-2"><Badge tone={lesson.status === "CANCELLED" ? "owed" : "brand"}>{lesson.status.toLowerCase()}</Badge>{lesson.seriesId && <span>Part of a weekly series.</span>}{seat ? <span>{group ? "Each student is charged on their own account." : "Changing the price or date changes the charge on the account."}</span> : <span>No student, no charge.</span>}</span>}
       />
       <Card>
         <LessonForm
           action={updateLessonAction}
-          studentId={seat?.studentId}
-          noStudent={!seat}
+          students={choices}
           lessonId={lesson.id}
           inSeries={lesson.seriesId !== null}
           returnTo={returnTo}
@@ -41,7 +43,7 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
           submitLabel="Save"
           initial={{
             date: localDateStr(lesson.startsAt, tz), time: localTimeStr(lesson.startsAt, tz), durationMin: lesson.durationMin, subject: lesson.subject,
-            price: seat ? (seat.priceCents / 100).toFixed(2) : "", tutorId: lesson.tutorId ?? "", locationType: lesson.locationType,
+            seats: lesson.students.map((s) => ({ studentId: s.studentId, price: (s.priceCents / 100).toFixed(2) })), tutorId: lesson.tutorId ?? "", locationType: lesson.locationType,
             meetingLink: lesson.meetingLink ?? "", notes: lesson.notes ?? "", category: lesson.category ?? "", allDay: lesson.allDay,
           }}
         />

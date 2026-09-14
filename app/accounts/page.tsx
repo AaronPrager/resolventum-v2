@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { CircleCheck, PiggyBank, TrendingUp } from "lucide-react";
+import { CircleCheck, FolderDown, PiggyBank, TrendingUp } from "lucide-react";
 import { formatCents } from "@/src/lib/format";
-import { localDateOnly } from "@/src/lib/tz";
+import { localDateOnly, localDateStr } from "@/src/lib/tz";
 import { accountBalances } from "@/src/services/balances";
-import { Balance, Card, Empty, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { Balance, Button, Card, Empty, Input, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,26 @@ export default async function AccountsPage() {
   const open = balances.filter((b) => b.balanceCents !== 0).sort((a, b) => b.balanceCents - a.balanceCents);
   const owed = open.filter((b) => b.balanceCents > 0).reduce((s, b) => s + b.balanceCents, 0);
   const credit = open.filter((b) => b.balanceCents < 0).reduce((s, b) => s - b.balanceCents, 0);
+  const thisMonth = localDateStr(new Date(), session.timezone).slice(0, 7);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Accounts" subtitle={<span>{org.name} · {balances.length} accounts, {open.length} with an open balance</span>} />
+      <PageHeader
+        title="Accounts"
+        subtitle={<span>{org.name} · {balances.length} accounts, {open.length} with an open balance</span>}
+        actions={
+          <>
+            <a href="/api/documents?kind=statement" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium shadow-xs hover:bg-surface-2" title="One PDF per account with a balance or credit">
+              <FolderDown className="size-4" aria-hidden />Statements (ZIP)
+            </a>
+            <form action="/api/documents" method="get" className="flex items-center gap-2">
+              <input type="hidden" name="kind" value="invoice" />
+              <Input type="month" name="month" defaultValue={thisMonth} aria-label="Invoice month" className="w-40" required />
+              <Button type="submit" variant="secondary" title="One invoice per account with charges that month or a balance owed"><FolderDown aria-hidden />Invoices (ZIP)</Button>
+            </form>
+          </>
+        }
+      />
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Owed to you" value={formatCents(owed)} tone="owed" icon={<TrendingUp aria-hidden />} />
         <Stat label="Credit held" value={formatCents(credit)} tone="credit" icon={<PiggyBank aria-hidden />} />

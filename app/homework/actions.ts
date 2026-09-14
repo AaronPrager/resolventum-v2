@@ -9,7 +9,7 @@ import { homeworkLinkEmail } from "@/src/email/templates";
 import { AiError, aiConfigured } from "@/src/ai/generate";
 import { approveFeedback, discardDraft, draftFeedback } from "@/src/ai/drafts";
 import { FileError, addToLibrary, removeFromLibrary, storeFile } from "@/src/services/files";
-import { HomeworkError, createAssignment, deleteAssignment, giveFeedback, markAssigned, regenerateUploadLink, updateAssignment } from "@/src/services/homework";
+import { HomeworkError, archiveAssignments, archiveOlderThan, createAssignment, deleteAssignment, giveFeedback, markAssigned, regenerateUploadLink, unarchiveAssignment, updateAssignment } from "@/src/services/homework";
 
 export interface ActionState { error?: string; ok?: string; link?: string }
 
@@ -147,4 +147,41 @@ export async function removeLibraryAction(fd: FormData): Promise<void> {
   const f = await prisma.file.findFirst({ where: { id: str(fd, "fileId"), organizationId: s.organizationId } });
   if (f) await removeFromLibrary(prisma, f.id);
   revalidatePath("/library");
+}
+
+export async function archiveSelectedAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const s = await requireWriter();
+    const ids = fd.getAll("assignmentId").map(String);
+    if (ids.length === 0) return { error: "Tick the ones to archive" };
+    const n = await archiveAssignments(prisma, s.organizationId, ids);
+    revalidatePath("/homework");
+    return { ok: `${n} archived` };
+  } catch (e) {
+    if (e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function archiveOlderAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const s = await requireWriter();
+    const before = String(fd.get("before") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(before)) return { error: "Pick a date" };
+    const n = await archiveOlderThan(prisma, s.organizationId, new Date(`${before}T00:00:00Z`));
+    revalidatePath("/homework");
+    return { ok: n === 0 ? "Nothing that old" : `${n} archived` };
+  } catch (e) {
+    if (e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function toggleArchiveAction(fd: FormData): Promise<void> {
+  const s = await requireWriter();
+  const id = String(fd.get("assignmentId"));
+  if (fd.get("archived") === "1") await unarchiveAssignment(prisma, s.organizationId, id);
+  else await archiveAssignments(prisma, s.organizationId, [id]);
+  revalidatePath("/homework");
+  revalidatePath(`/homework/${id}`);
 }

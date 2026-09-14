@@ -102,3 +102,34 @@ describe("homework", () => {
     expect(await prisma.libraryItem.findUnique({ where: { fileId: lib.id } })).toBeNull();
   });
 });
+
+describe("archiving homework", () => {
+  it("archives picked and old work, keeps work waiting for review, and can undo", async () => {
+    const { archiveAssignments, archiveOlderThan, listAssignments, unarchiveAssignment } = await import("./homework");
+    const org = await prisma.organization.findFirstOrThrow({ where: { name: "Easy STEM School" } });
+    const student = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id, firstName: "Estella" } });
+    const tag = `Archivetest${Date.now()}`;
+    const mk = (title: string, dueOn: string | null, status: "ASSIGNED" | "SOLVED" = "ASSIGNED") =>
+      prisma.assignment.create({ data: { organizationId: org.id, studentId: student.id, title: `${tag} ${title}`, dueOn: dueOn ? new Date(`${dueOn}T00:00:00Z`) : null, status } });
+    const old = await mk("old", "2020-01-10");
+    const waiting = await mk("waiting", "2020-01-10", "SOLVED");
+    const fresh = await mk("fresh", "2099-01-10");
+    const picked = await mk("picked", "2099-02-10");
+    try {
+      const today = new Date("2026-09-13T00:00:00Z");
+      expect(await archiveOlderThan(prisma, org.id, new Date("2021-01-01T00:00:00Z"))).toBeGreaterThanOrEqual(1);
+      expect(await archiveAssignments(prisma, org.id, [picked.id])).toBe(1);
+      const open = (await listAssignments(prisma, org.id, { today, studentId: student.id })).map((r) => r.id);
+      expect(open).toContain(waiting.id);
+      expect(open).toContain(fresh.id);
+      expect(open).not.toContain(old.id);
+      expect(open).not.toContain(picked.id);
+      const archived = (await listAssignments(prisma, org.id, { today, studentId: student.id, archived: true })).map((r) => r.id);
+      expect(archived).toEqual(expect.arrayContaining([old.id, picked.id]));
+      await unarchiveAssignment(prisma, org.id, picked.id);
+      expect((await prisma.assignment.findUniqueOrThrow({ where: { id: picked.id } })).archivedAt).toBeNull();
+    } finally {
+      await prisma.assignment.deleteMany({ where: { title: { startsWith: tag } } });
+    }
+  });
+});

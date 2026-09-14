@@ -4,14 +4,15 @@ import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { formatCents, formatDate, formatWhen, localDateStr } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
-import { studentDetail } from "@/src/services/students";
+import { studentChoices, studentDetail } from "@/src/services/students";
 import { accountBalances } from "@/src/services/balances";
 import { LessonForm } from "@/app/lessons/LessonForm";
 import { cancelLessonAction, createLessonAction, restoreLessonAction } from "@/app/lessons/actions";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, X } from "lucide-react";
 import { Avatar, Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
-import { archiveStudentAction, unarchiveStudentAction } from "../actions";
+import { archiveStudentAction, deleteProgressNoteAction, unarchiveStudentAction } from "../actions";
+import { ProgressNoteForm } from "../forms";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const detail = await studentDetail(prisma, id);
   if (!detail || detail.student.organizationId !== session.organizationId) notFound();
   const { student, tutors } = detail;
+  const choices = await studentChoices(prisma, student.organizationId, [student.id]);
   const tz = student.organization.timezone;
   const balances = await accountBalances(prisma, student.organization.id, localDateOnly(new Date(), student.organization.timezone));
   const balance = balances.find((b) => b.accountId === student.accountId)?.balanceCents ?? 0;
@@ -41,6 +43,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
         actions={
           <>
             <LinkButton href={`/students/${student.id}/update`} variant="primary">Parent update (AI)</LinkButton>
+            <LinkButton href={`/students/${student.id}/edit`} variant="secondary"><Pencil aria-hidden />Edit</LinkButton>
             <LinkButton href={`/homework?student=${student.id}`} variant="secondary">Homework</LinkButton>
             {student.archivedAt ? (
               <form action={unarchiveStudentAction}>
@@ -68,6 +71,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
             </p>
             <p><Balance cents={balance} className="text-base font-semibold" /></p>
             {student.defaultPriceCents != null && <p className="text-muted">Usual price {formatCents(student.defaultPriceCents)}</p>}
+            <p className="pt-1"><a href={`/api/students/${student.id}/agreement`} className="text-xs text-brand hover:underline">Tutoring agreement (PDF)</a></p>
           </div>
         </Card>
         <Card title="Contacts">
@@ -100,14 +104,14 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
         <div className="p-4 sm:p-5">
         <LessonForm
           action={createLessonAction}
-          studentId={student.id}
+          students={choices}
           tutors={tutors}
           submitLabel="Add lesson"
           allowRepeat
           initial={{
             date: localDateStr(nextSlot, tz), time: "16:00", durationMin: 60,
             subject: student.defaultSubject ?? "",
-            price: student.defaultPriceCents != null ? (student.defaultPriceCents / 100).toFixed(2) : "",
+            seats: [{ studentId: student.id, price: student.defaultPriceCents != null ? (student.defaultPriceCents / 100).toFixed(2) : "" }],
             tutorId: tutors.length === 1 ? tutors[0].id : "", locationType: "IN_PERSON", meetingLink: "", notes: "", category: "",
           }}
         />
@@ -117,13 +121,33 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
       <LessonTable title={`Upcoming (${upcoming.length})`} rows={showAll ? upcoming : upcoming.slice(0, 8)} hidden={showAll ? 0 : Math.max(0, upcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" />
       <LessonTable title={`Past (${past.length})`} rows={showAll ? past : past.slice(0, 12)} hidden={showAll ? 0 : Math.max(0, past.length - 12)} tz={tz} studentId={student.id} testId="past" />
 
-      {student.progressNotes.length > 0 && (
-        <Card title="Progress notes">
-          <div className="space-y-1.5 text-sm">
-            {student.progressNotes.map((n) => <p key={n.id}><span className="mr-2 text-muted tabular-nums">{formatDate(n.notedOn)}</span>{n.note}</p>)}
-          </div>
-        </Card>
-      )}
+      <Card title="Progress notes" actions={<span className="text-xs text-muted">Where you stopped and where to start next</span>}>
+        <div className="space-y-4">
+          <ProgressNoteForm studentId={student.id} today={localDateStr(now, tz)} />
+          {student.progressNotes.length === 0 ? <p className="text-sm text-muted">No notes yet.</p> : (
+            <ul className="divide-y divide-line" data-testid="progress-notes">
+              {student.progressNotes.map((n) => (
+                <li key={n.id} className="py-2.5">
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-start gap-3 text-sm [&::-webkit-details-marker]:hidden">
+                      <span className="w-24 shrink-0 tabular-nums text-muted">{formatDate(n.notedOn)}</span>
+                      <span className="min-w-0 flex-1 whitespace-pre-line">{n.note}</span>
+                      <Pencil className="mt-0.5 size-3.5 shrink-0 text-faint opacity-0 group-hover:opacity-100" aria-label="Edit note" />
+                    </summary>
+                    <div className="mt-2 flex items-start gap-2 pl-0 sm:pl-27">
+                      <div className="flex-1"><ProgressNoteForm studentId={student.id} today={localDateStr(now, tz)} note={{ id: n.id, notedOn: n.notedOn.toISOString().slice(0, 10), note: n.note }} /></div>
+                      <ConfirmForm action={deleteProgressNoteAction} message="Delete this note?">
+                        <input type="hidden" name="noteId" value={n.id} /><input type="hidden" name="studentId" value={student.id} />
+                        <Button variant="ghost" aria-label="Delete note" title="Delete note"><X aria-hidden /></Button>
+                      </ConfirmForm>
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
 
       {student.assignments.length > 0 && (
         <Card title="Homework">

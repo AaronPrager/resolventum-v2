@@ -97,6 +97,15 @@ model Organization {
   logo                   File?     @relation("OrgLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
   onboardingCompletedAt  DateTime?
   studentIntakeEnabled   Boolean   @default(false)
+  /// The code in the public family sign-up link (/join/CODE). Plain, like a booking link; regenerate to change it.
+  intakeCode             String?   @unique
+  /// Filled into the tutoring agreement. Placeholders like {{STUDENT_NAME}}.
+  agreementTemplate      String?
+  /// Nightly job emails families about tomorrow's lessons.
+  lessonRemindersAuto    Boolean   @default(false)
+  /// Nightly job emails the day's schedule to dailyScheduleEmail (or the owner).
+  dailyScheduleAuto      Boolean   @default(false)
+  dailyScheduleEmail     String?
   // Product billing. Unused until Stripe lands.
   plan                   String    @default("free")
   stripeCustomerId       String?   @unique
@@ -533,6 +542,8 @@ model Assignment {
   dueOn          DateTime?        @db.Date
   status         AssignmentStatus @default(PENDING)
   inviteSentAt   DateTime?
+  /// Hidden from the open lists; still on the student page history.
+  archivedAt     DateTime?
   createdById    String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -542,6 +553,7 @@ model Assignment {
 
   @@index([studentId, status])
   @@index([organizationId, dueOn])
+  @@index([organizationId, archivedAt])
   @@index([lessonId])
 }
 

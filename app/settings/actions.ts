@@ -5,6 +5,9 @@ import { prisma } from "@/src/db";
 import { requireSession, requireWriter } from "@/src/auth/current";
 import { AccountError, changePassword } from "@/src/auth/account";
 import { issueFeedToken, revokeFeedToken } from "@/src/services/calendarFeed";
+import { removeLogo, setLogo } from "@/src/services/branding";
+import { FileError } from "@/src/services/files";
+import { disableIntake, enableIntake } from "@/src/services/intake";
 
 export interface FeedState { url?: string; error?: string }
 export interface ActionState { error?: string; ok?: string }
@@ -83,4 +86,45 @@ export async function changePasswordAction(_p: ActionState, fd: FormData): Promi
   try { await changePassword(prisma, s.userId, String(fd.get("current") ?? ""), next); }
   catch (e) { if (e instanceof AccountError) return { error: e.message }; throw e; }
   return { ok: "Password changed" };
+}
+
+export async function uploadLogoAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return { error: "Only the owner can change the logo" };
+  const f = fd.get("logo");
+  if (!(f instanceof File) || f.size === 0) return { error: "Pick an image" };
+  try {
+    await setLogo(prisma, s.organizationId, { name: f.name, mimeType: f.type, data: new Uint8Array(await f.arrayBuffer()) }, s.userId);
+  } catch (e) {
+    if (e instanceof FileError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath("/settings");
+  return { ok: "Logo saved. It now appears on statements, invoices, and pay slips." };
+}
+
+export async function removeLogoAction(): Promise<void> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return;
+  await removeLogo(prisma, s.organizationId);
+  revalidatePath("/settings");
+}
+
+export async function intakeAction(fd: FormData): Promise<void> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return;
+  const what = str(fd, "what");
+  if (what === "off") await disableIntake(prisma, s.organizationId);
+  else await enableIntake(prisma, s.organizationId, what === "regenerate");
+  revalidatePath("/settings");
+}
+
+export async function saveAgreementAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return { error: "Only the owner can change the agreement" };
+  const text = String(fd.get("template") ?? "");
+  if (text.length > 20000) return { error: "The agreement is too long; keep it under 20,000 characters" };
+  await prisma.organization.update({ where: { id: s.organizationId }, data: { agreementTemplate: text.trim() || null } });
+  revalidatePath("/settings/agreement");
+  return { ok: text.trim() ? "Saved" : "Back to the standard wording" };
 }

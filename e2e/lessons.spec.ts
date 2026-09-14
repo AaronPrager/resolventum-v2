@@ -84,3 +84,43 @@ test("the form rejects a bad price", async ({ page }) => {
   await form.getByRole("button", { name: "Add lesson" }).click();
   await expect(form.getByRole("alert")).toContainText("Price must be a number");
 });
+
+test("a group lesson: two students with their own prices, then one taken off", async ({ page }) => {
+  const subject = `E2E group ${Date.now()}`;
+  const estella = await prisma.student.findFirstOrThrow({ where: { firstName: "Estella", lastName: "Urman" } });
+  const lina = await prisma.student.findFirstOrThrow({ where: { firstName: "Lina", lastName: "Vernik" } });
+  await page.goto("/lessons/new?date=2027-05-10&returnTo=%2Fcalendar%3Fday%3D2027-05-10");
+  const form = page.getByTestId("lesson-form");
+  await form.getByLabel("Student", { exact: true }).selectOption({ label: "Urman, Estella" });
+  await form.getByLabel("Price", { exact: true }).fill("80");
+  await form.getByRole("button", { name: "Make it a group" }).click();
+  await form.getByLabel("Student 2").selectOption({ label: "Vernik, Lina" });
+  await form.getByLabel("Price 2").fill("70");
+  await expect(form.getByText("Group of 2")).toBeVisible();
+  await form.getByLabel("Time").fill("17:00");
+  await form.getByLabel("Subject").fill(subject);
+  await form.getByRole("button", { name: "Add lesson" }).click();
+
+  const chip = page.getByRole("button", { name: new RegExp(`Estella Urman, Lina Vernik · ${subject}`) });
+  await expect(chip).toBeVisible();
+  const lesson = await prisma.lesson.findFirstOrThrow({ where: { subject }, include: { students: { include: { charge: true } } } });
+  expect(lesson.students.map((s) => [s.studentId, s.charge?.amountCents]).sort()).toEqual([[estella.id, 8000], [lina.id, 7000]].sort());
+
+  await chip.dblclick();
+  await expect(page.getByRole("heading", { name: "Edit group lesson" })).toBeVisible();
+  await page.getByTestId("lesson-form").getByRole("button", { name: "Remove Vernik, Lina" }).click();
+  await page.getByTestId("lesson-form").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: new RegExp(`^Estella Urman · ${subject}`) })).toBeVisible();
+  const linaCharge = await prisma.charge.findFirstOrThrow({ where: { studentId: lina.id, description: { startsWith: subject } } });
+  expect(linaCharge.voidedAt).not.toBeNull();
+
+  // Clean up, and put Estella's and Lina's allocations back.
+  const charges = await prisma.charge.findMany({ where: { description: { startsWith: subject } } });
+  await prisma.allocation.deleteMany({ where: { chargeId: { in: charges.map((c) => c.id) } } });
+  await prisma.charge.deleteMany({ where: { id: { in: charges.map((c) => c.id) } } });
+  await prisma.lessonStudent.deleteMany({ where: { lessonId: lesson.id } });
+  await prisma.lesson.delete({ where: { id: lesson.id } });
+  const { rebuildAccountAllocations } = await import("../src/services/allocation");
+  await rebuildAccountAllocations(prisma, estella.accountId);
+  await rebuildAccountAllocations(prisma, lina.accountId);
+});

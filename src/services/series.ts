@@ -10,7 +10,7 @@ import type { PrismaClient } from "../../generated/prisma/client";
 import { dateOnlyFromStr, localDateOnly, localDateStr, localTimeStr, zonedToUtc } from "../lib/tz";
 import { formatRule, parseRule, weeklyOccurrences, weeklyOccurrencesAfter } from "../lib/recurrence";
 import { rebuildAccountAllocations } from "./allocation";
-import { LessonError, type LessonInput, type LessonUpdate, cancelLesson, deleteLesson, resolveOwner, updateLesson } from "./lessons";
+import { LessonError, type LessonInput, type LessonUpdate, addSeat, cancelLesson, deleteLesson, resolveRoster, updateLesson } from "./lessons";
 
 export const HORIZON_DAYS = 180;
 
@@ -30,12 +30,11 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
   if (!Number.isInteger(intervalWeeks) || intervalWeeks < 1 || intervalWeeks > 52) throw new LessonError("Repeat interval must be 1 to 52 weeks");
   if (input.until && !/^\d{4}-\d{2}-\d{2}$/.test(input.until)) throw new LessonError("Repeat-until must be a date");
   if (!(input.startsAt instanceof Date) || Number.isNaN(input.startsAt.getTime())) throw new LessonError("Start time is not valid");
-  if (!Number.isInteger(input.durationMin) || input.durationMin <= 0 || input.durationMin > 1440) throw new LessonError("Duration must be between 1 and 1440 minutes");
   if (input.allDay) input = { ...input, durationMin: 1440 };
-  if (!input.subject.trim()) throw new LessonError(input.studentId ? "Subject is required" : "A title is required for an event with no student");
-  if (input.studentId && (!Number.isInteger(input.priceCents) || input.priceCents < 0)) throw new LessonError("Price must be zero or more");
+  if (!Number.isInteger(input.durationMin) || input.durationMin <= 0 || input.durationMin > 1440) throw new LessonError("Duration must be between 1 and 1440 minutes");
 
-  const { student, organizationId, timezone: tz } = await resolveOwner(db, input);
+  const { seats, organizationId, timezone: tz } = await resolveRoster(db, input);
+  if (!input.subject.trim()) throw new LessonError(seats.length ? "Subject is required" : "A title is required for an event with no student");
   const firstDate = localDateStr(input.startsAt, tz);
   if (input.until && input.until < firstDate) throw new LessonError("Repeat-until is before the first lesson");
 
@@ -45,66 +44,41 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
 
   const result = await db.$transaction(async (tx) => {
     const series = await tx.lessonSeries.create({
-      data: {
-        organizationId,
-        rrule: formatRule({ intervalWeeks }),
-        startsAt: input.startsAt,
-        endsOn: input.until ? dateOnlyFromStr(input.until) : null,
-      },
+      data: { organizationId, rrule: formatRule({ intervalWeeks }), startsAt: input.startsAt, endsOn: input.until ? dateOnlyFromStr(input.until) : null },
     });
     const ids: string[] = [];
     for (const startsAt of occurrences) {
       const status = startsAt <= now ? "COMPLETED" : "SCHEDULED";
       const lesson = await tx.lesson.create({
         data: {
-          organizationId,
-          tutorId: input.tutorId ?? null,
-          seriesId: series.id,
-          startsAt,
-          durationMin: input.durationMin,
-          allDay: !!input.allDay,
-          subject: input.subject.trim(),
-          category: input.category ?? null,
-          locationType: input.locationType ?? "IN_PERSON",
-          meetingLink: input.meetingLink?.trim() || null,
-          notes: input.notes?.trim() || null,
-          status,
-          createdById: createdById ?? null,
+          organizationId, tutorId: input.tutorId ?? null, seriesId: series.id, startsAt, durationMin: input.durationMin, allDay: !!input.allDay,
+          subject: input.subject.trim(), category: input.category ?? null, locationType: input.locationType ?? "IN_PERSON",
+          meetingLink: input.meetingLink?.trim() || null, notes: input.notes?.trim() || null, status, createdById: createdById ?? null,
         },
       });
       ids.push(lesson.id);
-      if (!student) continue;
-      const seat = await tx.lessonStudent.create({ data: { lessonId: lesson.id, studentId: student.id, priceCents: input.priceCents, status } });
-      await tx.charge.create({
-        data: {
-          organizationId,
-          accountId: student.accountId,
-          studentId: student.id,
-          lessonStudentId: seat.id,
-          kind: "LESSON",
-          amountCents: input.priceCents,
-          chargedOn: localDateOnly(startsAt, tz),
-          description: `${input.subject.trim()}, ${input.durationMin} min`,
-        },
-      });
+      for (const seat of seats) {
+        await addSeat(tx, { organizationId, timezone: tz, lessonId: lesson.id, startsAt, subject: input.subject, durationMin: input.durationMin, groupSize: seats.length, status, seat });
+      }
     }
     return { series, lessonIds: ids };
-  });
-  if (student) await rebuildAccountAllocations(db, student.accountId);
+  }, { timeout: 60_000 });
+  for (const accountId of new Set(seats.map((s) => s.student.accountId))) await rebuildAccountAllocations(db, accountId);
   return result;
 }
 
 /**
  * Generate missing lessons for every open-ended series up to the horizon.
- * Copies subject, price, tutor, and the rest from the last lesson of the series.
- * Returns the number of lessons created.
+ * Copies subject, tutor, roster, prices, and the rest from the latest lesson
+ * of the series. Students who are archived since are left off; a series whose
+ * whole roster is gone stops growing. Returns the number of lessons created.
  */
 export async function extendOpenSeries(db: PrismaClient, organizationId: string, now = new Date()): Promise<number> {
   const org = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
   const until = horizonDateStr(org.timezone, now);
   const series = await db.lessonSeries.findMany({
     where: { organizationId, endsOn: null },
-    include: { lessons: { where: { deletedAt: null }, orderBy: { startsAt: "desc" }, take: 1, include: { students: true } } },
+    include: { lessons: { where: { deletedAt: null }, orderBy: { startsAt: "desc" }, take: 1, include: { students: { include: { student: { select: { id: true, accountId: true, organizationId: true, deletedAt: true, archivedAt: true } } } } } } },
   });
   // Latest date each series ever reached, deleted lessons included, so a deleted one is not made again.
   const reached = new Map(
@@ -115,10 +89,9 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
   const touchedAccounts = new Set<string>();
   for (const s of series) {
     const last = s.lessons[0];
-    if (!last || last.students.length > 1) continue; // nothing to copy from, or a group series
-    const seat = last.students[0] ?? null; // null: a repeating event with no student
-    const student = seat ? await db.student.findUnique({ where: { id: seat.studentId }, select: { id: true, accountId: true, deletedAt: true, archivedAt: true } }) : null;
-    if (seat && (!student || student.deletedAt || student.archivedAt)) continue;
+    if (!last) continue;
+    const roster = last.students.filter((x) => !x.student.deletedAt && !x.student.archivedAt).map((x) => ({ studentId: x.studentId, priceCents: x.priceCents, student: x.student }));
+    if (last.students.length > 0 && roster.length === 0) continue; // everyone left
     const { intervalWeeks } = parseRule(s.rrule);
     const dates = weeklyOccurrencesAfter({ firstStartsAt: s.startsAt, timeZone: org.timezone, intervalWeeks, after: reached.get(s.id) ?? last.startsAt, until });
     if (dates.length === 0) continue;
@@ -131,17 +104,12 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
           },
         });
         created++;
-        if (!seat || !student) continue;
-        const newSeat = await tx.lessonStudent.create({ data: { lessonId: lesson.id, studentId: student.id, priceCents: seat.priceCents, status: "SCHEDULED" } });
-        await tx.charge.create({
-          data: {
-            organizationId, accountId: student.accountId, studentId: student.id, lessonStudentId: newSeat.id, kind: "LESSON",
-            amountCents: seat.priceCents, chargedOn: localDateOnly(startsAt, org.timezone), description: `${last.subject}, ${last.durationMin} min`,
-          },
-        });
+        for (const seat of roster) {
+          await addSeat(tx, { organizationId, timezone: org.timezone, lessonId: lesson.id, startsAt, subject: last.subject, durationMin: last.durationMin, groupSize: roster.length, status: "SCHEDULED", seat });
+        }
       }
-    });
-    if (student) touchedAccounts.add(student.accountId);
+    }, { timeout: 60_000 });
+    for (const seat of roster) touchedAccounts.add(seat.student.accountId);
   }
   for (const accountId of touchedAccounts) await rebuildAccountAllocations(db, accountId);
   return created;

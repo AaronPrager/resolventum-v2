@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, CalendarDays, CreditCard, Ellipsis, GraduationCap, Receipt, Settings, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, CalendarDays, CreditCard, Ellipsis, GraduationCap, Mail, Receipt, Settings, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
 interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean }
@@ -13,6 +13,7 @@ const teach: Item[] = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p === "/" || p.startsWith("/calendar") || p.startsWith("/lessons") },
   { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") },
   { href: "/homework", label: "Homework", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") || p.startsWith("/library") },
+  { href: "/emails", label: "Emails", icon: Mail, match: (p) => p.startsWith("/emails") },
 ];
 const money: Item[] = [
   { href: "/accounts", label: "Accounts", icon: Wallet, match: (p) => p.startsWith("/accounts") },
@@ -53,7 +54,7 @@ export function SideNav() {
 }
 
 const bar: Item[] = [teach[0], teach[1], money[0], money[1]];
-const more: Item[] = [teach[2], money[2], money[3], settings];
+const more: Item[] = [teach[2], teach[3], money[2], money[3], settings];
 
 export function BottomNav() {
   const path = usePathname();

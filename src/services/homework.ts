@@ -180,9 +180,9 @@ export interface AssignmentRow {
   createdAt: Date;
 }
 
-export async function listAssignments(db: PrismaClient, organizationId: string, opts: { status?: EffectiveStatus | "OPEN"; studentId?: string; today: Date }): Promise<AssignmentRow[]> {
+export async function listAssignments(db: PrismaClient, organizationId: string, opts: { status?: EffectiveStatus | "OPEN"; studentId?: string; today: Date; archived?: boolean }): Promise<AssignmentRow[]> {
   const rows = await db.assignment.findMany({
-    where: { organizationId, ...(opts.studentId ? { studentId: opts.studentId } : {}) },
+    where: { organizationId, archivedAt: opts.archived ? { not: null } : null, ...(opts.studentId ? { studentId: opts.studentId } : {}) },
     include: { student: { select: { firstName: true, lastName: true } }, _count: { select: { submissions: true } } },
     orderBy: [{ dueOn: "asc" }, { createdAt: "desc" }],
   });
@@ -209,4 +209,33 @@ export async function assignmentDetail(db: PrismaClient, organizationId: string,
   const drafts = await db.draft.findMany({ where: { kind: "FEEDBACK", subjectId: { in: a.submissions.map((s) => s.id) }, status: "DRAFT" }, orderBy: { createdAt: "desc" } });
   const activeToken = await db.token.findFirst({ where: { kind: "HOMEWORK_UPLOAD", subjectId: a.id, revokedAt: null } });
   return { assignment: a, drafts, hasLink: !!activeToken };
+}
+
+/** Hide assignments from the open lists. Returns how many changed. */
+export async function archiveAssignments(db: PrismaClient, organizationId: string, ids: string[], now = new Date()) {
+  const r = await db.assignment.updateMany({ where: { organizationId, id: { in: ids }, archivedAt: null }, data: { archivedAt: now } });
+  return r.count;
+}
+
+export async function unarchiveAssignment(db: PrismaClient, organizationId: string, id: string) {
+  const r = await db.assignment.updateMany({ where: { organizationId, id }, data: { archivedAt: null } });
+  if (r.count === 0) throw new HomeworkError("Assignment not found");
+}
+
+/**
+ * Archive old work in one go: everything due before the date (or, with no due
+ * date, made before it). Work a student sent that you have not reviewed stays
+ * out, so nothing waiting for you disappears.
+ */
+export async function archiveOlderThan(db: PrismaClient, organizationId: string, before: Date, now = new Date()) {
+  const r = await db.assignment.updateMany({
+    where: {
+      organizationId,
+      archivedAt: null,
+      status: { not: "SOLVED" },
+      OR: [{ dueOn: { lt: before } }, { dueOn: null, createdAt: { lt: before } }],
+    },
+    data: { archivedAt: now },
+  });
+  return r.count;
 }

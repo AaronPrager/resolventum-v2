@@ -1,5 +1,6 @@
 /** Against the dev server and the imported data. Run `npm run import` first. */
 import { expect, test } from "@playwright/test";
+import { prisma } from "../src/db";
 
 test("home lists accounts with balances", async ({ page }) => {
   await page.goto("/accounts");
@@ -27,4 +28,24 @@ test("statement can be narrowed to a period", async ({ page }) => {
   await page.getByRole("button", { name: "Show" }).click();
   await expect(page).toHaveURL(/from=2026-01-01/);
   await expect(page.getByText("Opening balance")).toBeVisible();
+});
+
+test("statement and invoice PDFs download, and the statement ZIP", async ({ page }) => {
+  const account = await prisma.account.findFirstOrThrow({ where: { name: "Estella Urman" } });
+  await page.goto(`/accounts/${account.id}`);
+  const docs = page.getByTestId("documents");
+  const [pdf] = await Promise.all([page.waitForEvent("download"), docs.getByRole("link", { name: "Download" }).click()]);
+  expect(pdf.suggestedFilename()).toMatch(/^Statement - Estella Urman - .+\.pdf$/);
+  await docs.getByLabel("Invoice for a month").fill("2025-10");
+  const [inv] = await Promise.all([page.waitForEvent("download"), docs.getByRole("link", { name: "Invoice" }).click()]);
+  expect(inv.suggestedFilename()).toBe("Invoice - Estella Urman - 2025-10.pdf");
+
+  const zip = await page.request.get("/api/documents?kind=statement");
+  expect(zip.status()).toBe(200);
+  expect(zip.headers()["content-type"]).toBe("application/zip");
+  const noSession = await page.context().browser()!.newContext({ storageState: { cookies: [], origins: [] } });
+  const anon = await noSession.request.get(`http://localhost:3100/api/accounts/${account.id}/document`, { maxRedirects: 0 });
+  expect(anon.status()).toBe(307);
+  expect(anon.headers()["location"]).toContain("/login");
+  await noSession.close();
 });

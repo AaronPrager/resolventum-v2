@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { Button, Checkbox, Field, FormError, FormOk, Input, Select } from "@/src/components/ui";
-import { type ActionState, createCategoryAction, taxYearAction } from "../actions";
+import { type ActionState, createCategoryAction, setYearReportedAction, taxYearAction } from "../actions";
 
 export function TaxYearForm({ year, homeSqft, officeSqft, percent, filed }: { year: number; homeSqft: number | null; officeSqft: number | null; percent: string; filed: boolean }) {
   const [state, action, pending] = useActionState(taxYearAction, {} as ActionState);
@@ -32,6 +32,27 @@ export function CategoryForm() {
       </div>
       <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
       <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Saving" : "Add category"}</Button>
+    </form>
+  );
+}
+
+export function TaxFiledForm({ year, status }: { year: number; status: { payments: number; paymentsReported: number; expenses: number; expensesReported: number } }) {
+  const [state, action, pending] = useActionState(setYearReportedAction, {} as ActionState);
+  const all = status.payments + status.expenses;
+  const reported = status.paymentsReported + status.expensesReported;
+  const done = all > 0 && reported === all;
+  return (
+    <form action={action} className="space-y-3" data-testid="tax-filed">
+      <input type="hidden" name="year" value={year} />
+      <input type="hidden" name="reported" value={done ? "0" : "1"} />
+      <p className="text-sm">
+        {status.paymentsReported} of {status.payments} payments and {status.expensesReported} of {status.expenses} expenses are marked as reported.
+      </p>
+      <p className="text-xs text-muted">Once marked, those rows cannot be edited, so what you filed stays what the app shows. Unmark to make a correction, then mark again.</p>
+      <div className="flex items-center gap-3">
+        <Button type="submit" variant={done ? "secondary" : "primary"} disabled={pending || all === 0}>{pending ? "Saving" : done ? `Unmark ${year}` : `Mark ${year} as reported`}</Button>
+        <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+      </div>
     </form>
   );
 }

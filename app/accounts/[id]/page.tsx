@@ -11,6 +11,8 @@ import { ConfirmForm } from "@/src/components/ConfirmForm";
 import { emailConfigured } from "@/src/email/send";
 import { EmailStatement } from "./EmailStatement";
 import { Badge, Balance, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { removeGuardianAction } from "../actions";
+import { AccountForm, GuardianForm } from "./FamilyForms";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +61,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         subtitle={
           <span>
             {account.students.map((s) => <Link key={s.id} href={`/students/${s.id}`} className="mr-3 text-brand hover:underline">{s.firstName} {s.lastName}</Link>)}
-            {primary && <span className="text-muted">{primary.name}{primary.email && ` · ${primary.email}`}{primary.phone && ` · ${primary.phone}`}</span>}
+            {primary ? <span className="text-muted">{primary.name}{primary.email && ` · ${primary.email}`}{primary.phone && ` · ${primary.phone}`}</span> : <a href="#family" className="text-muted underline-offset-2 hover:underline">Add a contact</a>}
           </span>
         }
       />
@@ -76,7 +78,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         <Card title="Credit, fee, or tip"><AdjustmentForm accountId={id} today={today} students={account.students.map((s) => ({ id: s.id, name: `${s.firstName} ${s.lastName}` }))} /></Card>
       </div>
 
-      <div className="print:hidden"><EmailStatement accountId={id} defaultTo={primary?.email ?? ""} from={from ? fmtDate(from) : ""} to={to ? fmtDate(to) : ""} configured={emailConfigured()} /></div>
+      <div className="print:hidden"><EmailStatement accountId={id} defaultTo={account.guardians.find((g) => g.isBilling)?.email ?? primary?.email ?? ""} from={from ? fmtDate(from) : ""} to={to ? fmtDate(to) : ""} configured={emailConfigured()} month={today.slice(0, 7)} /></div>
 
       <Card
         title="Statement"
@@ -111,6 +113,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
                     <Td right num>{e.kind === "payment" ? formatCents(-e.deltaCents) : ""}</Td>
                     <Td right num><Balance cents={e.runningBalanceCents} /></Td>
                     <Td right>
+                      {e.kind === "payment" && <Link href={`/payments/${e.id}`} className="mr-3 text-xs text-brand hover:underline print:hidden">Edit</Link>}
                       {(e.kind === "payment" || e.subkind !== "LESSON") && (
                         <ConfirmForm action={voidEntryAction} className="inline print:hidden" message={`Void "${e.description}"? It leaves the statement and the balance changes. This is recorded, not deleted.`}>
                           <input type="hidden" name="accountId" value={id} />
@@ -128,6 +131,54 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           </TableWrap>
         )}
         {voidedCount > 0 && <p className="mt-3 text-xs text-muted">{voidedCount} voided {voidedCount === 1 ? "entry is" : "entries are"} not shown. Lessons are voided by cancelling them.</p>}
+      </Card>
+
+      <Card title="Family and contacts" className="print:hidden">
+        <div id="family" className="space-y-6">
+          <AccountForm accountId={id} name={account.name} notes={account.notes ?? ""} />
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Students</h3>
+            <ul className="flex flex-wrap gap-2">
+              {account.students.map((s) => (
+                <li key={s.id}><Link href={`/students/${s.id}`} className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm hover:border-line-strong">{s.firstName} {s.lastName}</Link></li>
+              ))}
+              <li><Link href="/students/new" className="inline-flex items-center rounded-full border border-dashed border-line-strong px-3 py-1 text-sm text-muted hover:text-fg">Add a sibling</Link></li>
+            </ul>
+            <p className="mt-2 text-xs text-muted">To move a student to another family, open the student and choose Edit.</p>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Contacts</h3>
+            {account.guardians.length === 0 && <p className="mb-3 text-sm text-muted">No contacts yet. Add a parent so statements have somewhere to go.</p>}
+            <ul className="mb-4 divide-y divide-line rounded-xl border border-line" data-testid="guardians">
+              {account.guardians.map((g) => (
+                <li key={g.id} className="px-4 py-3">
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 text-sm [&::-webkit-details-marker]:hidden">
+                      <span className="font-medium">{g.name}</span>
+                      {g.relationship && <span className="text-muted">{g.relationship}</span>}
+                      {g.isPrimary && <Badge tone="brand">main</Badge>}
+                      {g.isBilling && <Badge>statements</Badge>}
+                      {g.isEmergency && <Badge tone="warn">emergency</Badge>}
+                      <span className="text-muted">{[g.email, g.phone].filter(Boolean).join(" · ")}</span>
+                      <span className="ml-auto text-xs text-brand group-open:hidden">Edit</span>
+                    </summary>
+                    <div className="mt-3 space-y-3 border-t border-line pt-3">
+                      <GuardianForm accountId={id} guardian={{ id: g.id, name: g.name, email: g.email ?? "", phone: g.phone ?? "", relationship: g.relationship ?? "", address: g.address ?? "", isPrimary: g.isPrimary, isBilling: g.isBilling, isEmergency: g.isEmergency }} />
+                      <ConfirmForm action={removeGuardianAction} message={`Remove ${g.name} from this account?`}>
+                        <input type="hidden" name="guardianId" value={g.id} /><input type="hidden" name="accountId" value={id} />
+                        <Button variant="link" className="text-xs text-owed">Remove contact</Button>
+                      </ConfirmForm>
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ul>
+            <details className="rounded-xl border border-dashed border-line-strong px-4 py-3" open={account.guardians.length === 0}>
+              <summary className="cursor-pointer text-sm font-medium text-brand">Add a contact</summary>
+              <div className="mt-3"><GuardianForm accountId={id} /></div>
+            </details>
+          </div>
+        </div>
       </Card>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Button, Field, FormError, FormOk, Input, Select, Textarea } from "@/src/components/ui";
 import { type ActionState, createExpenseAction, updateExpenseAction } from "./actions";
+import { FileInput } from "@/src/components/FileInput";
 
 export interface ExpenseFormValues {
   spentOn: string; description: string; vendor: string; amount: string; categoryId: string; taxTreatment: string; businessPercent: string; paymentSourceId: string; notes: string;
@@ -49,7 +50,7 @@ export function ExpenseForm({ mode, expenseId, draftId, initial, categories, ven
         </Field>
         {treatment === "PARTIAL_USE" && <Field label="Business %"><Input type="number" name="businessPercent" min={0} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} required /></Field>}
         {sources.length > 0 && <Field label="Paid from"><Select name="paymentSourceId" defaultValue={initial.paymentSourceId}><option value="">not set</option>{sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>}
-        <Field label="Receipt" className="col-span-2"><Input type="file" name="receipt" accept="image/*,application/pdf" /></Field>
+        <Field label="Receipt" className="col-span-2"><FileInput name="receipt" accept="image/*,application/pdf" /></Field>
         <Field label="Notes" className="col-span-full"><Textarea name="notes" rows={2} defaultValue={initial.notes} /></Field>
       </div>
       <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>

@@ -97,7 +97,8 @@ export async function rebuildAccountAllocations(prisma: PrismaClient, accountId:
     });
     const rows = computeAllocations(charges, payments);
 
-    await tx.allocation.deleteMany({ where: { charge: { accountId } } });
+    // Both sides, so a charge or payment that just moved to another account leaves no link behind.
+    await tx.allocation.deleteMany({ where: { OR: [{ charge: { accountId } }, { payment: { accountId } }] } });
     if (rows.length) await tx.allocation.createMany({ data: rows });
 
     const allocated = rows.reduce((s, r) => s + r.amountCents, 0);

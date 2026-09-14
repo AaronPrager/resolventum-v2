@@ -20,14 +20,6 @@ function dollarsToCents(s: string): number {
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return NaN;
   return Math.round(Number(s) * 100);
 }
-/** The signed-in organization's timezone, after checking the student (if any) belongs to it. */
-async function orgTimezone(studentId: string): Promise<string> {
-  const session = await requireWriter();
-  if (!studentId) return session.timezone;
-  const s = await prisma.student.findFirst({ where: { id: studentId, organizationId: session.organizationId }, select: { id: true } });
-  if (!s) throw new LessonError("Student not found");
-  return session.timezone;
-}
 /** Same check by lesson, for events that have no student. */
 async function lessonTimezone(lessonId: string): Promise<string> {
   const session = await requireWriter();
@@ -41,9 +33,15 @@ function readLessonForm(fd: FormData, timeZone: string) {
   const allDay = str(fd, "allDay") === "on";
   const time = allDay ? "00:00" : str(fd, "time");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) throw new LessonError("Date and time are required");
-  const hasPrice = fd.has("price");
-  const priceCents = hasPrice ? dollarsToCents(str(fd, "price")) : 0;
-  if (Number.isNaN(priceCents)) throw new LessonError("Price must be a number like 130 or 130.00");
+  // The roster: parallel lists of student and price, one pair per row.
+  const ids = fd.getAll("seatStudentId").map((v) => String(v).trim());
+  const prices = fd.getAll("seatPrice").map((v) => String(v).trim());
+  const seats = ids.map((studentId, i) => {
+    if (!studentId) throw new LessonError("Pick a student for every row, or remove the empty row");
+    const priceCents = dollarsToCents(prices[i] ?? "");
+    if (Number.isNaN(priceCents)) throw new LessonError("Price must be a number like 130 or 130.00");
+    return { studentId, priceCents };
+  });
   const location = str(fd, "locationType");
   const category = str(fd, "category");
   return {
@@ -51,7 +49,8 @@ function readLessonForm(fd: FormData, timeZone: string) {
     allDay,
     durationMin: allDay ? 1440 : Number(str(fd, "durationMin")),
     subject: str(fd, "subject"),
-    priceCents,
+    seats,
+    priceCents: 0,
     tutorId: str(fd, "tutorId") || null,
     locationType: (location === "REMOTE" ? "REMOTE" : "IN_PERSON") as "REMOTE" | "IN_PERSON",
     meetingLink: str(fd, "meetingLink") || null,
@@ -61,15 +60,13 @@ function readLessonForm(fd: FormData, timeZone: string) {
 }
 
 export async function createLessonAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const raw = str(fd, "studentId");
-  if (!raw) return { error: "Pick a student, or choose no student for an event" };
-  const studentId = raw === "none" ? null : raw;
   const repeat = str(fd, "repeat") === "on";
-  const returnTo = str(fd, "returnTo") || (studentId ? `/students/${studentId}` : "/calendar");
+  const firstStudent = fd.getAll("seatStudentId").map(String).find(Boolean) ?? null;
+  const returnTo = str(fd, "returnTo") || (firstStudent ? `/students/${firstStudent}` : "/calendar");
   try {
     const session = await requireWriter();
-    const input = readLessonForm(fd, await orgTimezone(studentId ?? ""));
-    const owner = { studentId, organizationId: session.organizationId };
+    const input = readLessonForm(fd, session.timezone);
+    const owner = { organizationId: session.organizationId };
     if (repeat) {
       const intervalWeeks = Number(str(fd, "intervalWeeks") || "1");
       const until = str(fd, "until") || null;
@@ -81,14 +78,14 @@ export async function createLessonAction(_prev: ActionState, fd: FormData): Prom
     if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
     throw e;
   }
-  if (studentId) revalidatePath(`/students/${studentId}`);
+  revalidatePath("/students", "layout");
   revalidatePath("/calendar");
   redirect(returnTo);
 }
 
 export async function updateLessonAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const lessonId = str(fd, "lessonId");
-  const studentId = str(fd, "studentId");
+  const studentId = str(fd, "studentId") || (fd.getAll("seatStudentId").map(String).find(Boolean) ?? "");
   const scope = str(fd, "scope") === "future" ? "future" : "one";
   try {
     const tz = await lessonTimezone(lessonId);

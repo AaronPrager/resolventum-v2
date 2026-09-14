@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 import { Button, Field, FormError, FormOk, Input, Select, Textarea } from "@/src/components/ui";
-import { type ActionState, changePasswordAction, saveTutorAction, updateOrganizationAction } from "./actions";
+import { type ActionState, changePasswordAction, removeLogoAction, saveAgreementAction, saveTutorAction, updateOrganizationAction, uploadLogoAction } from "./actions";
+import { FileInput } from "@/src/components/FileInput";
 
 export function OrganizationForm({ org, zones, canEdit }: { org: { name: string; timezone: string; legalName: string; address: string; phone: string; replyToEmail: string; venmoHandle: string; zelleHandle: string }; zones: string[]; canEdit: boolean }) {
   const [state, action, pending] = useActionState(updateOrganizationAction, {} as ActionState);
@@ -54,6 +55,44 @@ export function PasswordForm() {
       </div>
       <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
       <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Saving" : "Change password"}</Button>
+    </form>
+  );
+}
+
+export function LogoForm({ logoUrl, canEdit }: { logoUrl: string | null; canEdit: boolean }) {
+  const [state, action, pending] = useActionState(uploadLogoAction, {} as ActionState);
+  return (
+    <div className="flex flex-wrap items-start gap-5" data-testid="logo-card">
+      <div className="flex h-20 w-48 items-center justify-center rounded-xl border border-dashed border-line-strong bg-surface-2 p-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {logoUrl ? <img src={logoUrl} alt="School logo" className="max-h-full max-w-full object-contain" /> : <span className="text-xs text-muted">No logo</span>}
+      </div>
+      {canEdit ? (
+        <div className="min-w-0 flex-1 space-y-2">
+          <form action={action} className="flex flex-wrap items-center gap-2">
+            <FileInput name="logo" accept="image/png,image/jpeg" aria-label="Logo image" className="w-auto" maxBytes={2 * 1024 * 1024} required />
+            <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Uploading" : logoUrl ? "Replace" : "Upload"}</Button>
+          </form>
+          {logoUrl && <form action={removeLogoAction}><Button variant="link" className="text-xs text-owed">Remove logo</Button></form>}
+          <p className="text-xs text-muted">PNG or JPEG, under 2 MB. A wide logo on a transparent background looks best.</p>
+          <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+        </div>
+      ) : <p className="text-sm text-muted">Only the owner can change the logo.</p>}
+    </div>
+  );
+}
+
+export function AgreementForm({ template, canEdit }: { template: string; canEdit: boolean }) {
+  const [state, action, pending] = useActionState(saveAgreementAction, {} as ActionState);
+  return (
+    <form action={action} className="space-y-3" data-testid="agreement-form">
+      <Textarea name="template" rows={18} defaultValue={template} readOnly={!canEdit} className="font-mono text-[13px] leading-relaxed" aria-label="Agreement text" />
+      {canEdit && (
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={pending}>{pending ? "Saving" : "Save"}</Button>
+          <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+        </div>
+      )}
     </form>
   );
 }

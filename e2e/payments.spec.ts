@@ -82,3 +82,33 @@ test("the payment form rejects a bad amount", async ({ page }) => {
   await pay.getByRole("button", { name: "Record" }).click();
   await expect(pay.getByRole("alert")).toContainText("Amount must be a number");
 });
+
+test("edit a payment from the statement", async ({ page }) => {
+  await page.goto(`/accounts/${accountId}`);
+  const creditNow = async () => {
+    const t = (await closing(page).innerText()).replace(/,/g, "");
+    const m = /(credit|owes) \$([\d.]+)/.exec(t);
+    return m ? (m[1] === "credit" ? 1 : -1) * Number(m[2]) : 0;
+  };
+  const start = await creditNow();
+  const money = (n: number) => `${n >= 0 ? "credit" : "owes"} $${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const pay = page.getByTestId("payment-form");
+  await pay.getByLabel("Amount").fill("100");
+  await pay.getByLabel("Date").fill("2026-09-10");
+  await pay.getByLabel("Notes, or reason for a refund").fill(`${TAG} to edit`);
+  await pay.getByRole("button", { name: "Record" }).click();
+  await expect(closing(page)).toContainText(money(start + 100));
+
+  const row = page.getByTestId("statement").getByRole("row", { name: new RegExp(`${TAG} to edit`) });
+  await row.getByRole("link", { name: "Edit" }).click();
+  await expect(page.getByRole("heading", { name: "Payment of $100.00" })).toBeVisible();
+  const form = page.getByTestId("payment-edit-form");
+  await form.getByLabel("Amount").fill("125");
+  await form.getByLabel("How").selectOption("CHECK");
+  await form.getByLabel("Reference").fill("check 1042");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(new RegExp(`/accounts/${accountId}$`));
+  await expect(closing(page)).toContainText(money(start + 125));
+  const p = await prisma.payment.findFirstOrThrow({ where: { accountId, notes: `${TAG} to edit` } });
+  expect([p.amountCents, p.method, p.reference]).toEqual([12500, "CHECK", "check 1042"]);
+});

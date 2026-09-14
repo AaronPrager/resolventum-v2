@@ -3,7 +3,7 @@ import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { formatCents } from "@/src/lib/format";
 import { dateOnlyFromStr, localDateOnly } from "@/src/lib/tz";
-import { monthlyReport, studentsByRevenue, tutorPay, yearSummary } from "@/src/services/reports";
+import { incomeByKind, monthlyReport, studentsByRevenue, tutorPay, yearSummary } from "@/src/services/reports";
 import { accountBalances } from "@/src/services/balances";
 import { Balance, Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
@@ -16,12 +16,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const q = await searchParams;
   const year = q.year && /^\d{4}$/.test(q.year) ? Number(q.year) : new Date().getFullYear();
   const now = new Date();
-  const [y, months, students, tutors, balances] = await Promise.all([
+  const [y, months, students, tutors, balances, income] = await Promise.all([
     yearSummary(prisma, s.organizationId, year, localDateOnly(now, s.timezone)),
     monthlyReport(prisma, s.organizationId, year),
     studentsByRevenue(prisma, s.organizationId, year),
     tutorPay(prisma, s.organizationId, dateOnlyFromStr(`${year}-01-01`), dateOnlyFromStr(`${year + 1}-01-01`)),
     accountBalances(prisma, s.organizationId, localDateOnly(now, s.timezone)),
+    incomeByKind(prisma, s.organizationId, year),
   ]);
   const owing = balances.filter((b) => b.balanceCents > 0).sort((a, b) => b.balanceCents - a.balanceCents);
   const maxPaid = Math.max(1, ...months.map((m) => m.paidCents));
@@ -40,6 +41,27 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Stat label="Students taught" value={y.activeStudents} tone="muted" />
         <Stat label="Average lesson" value={formatCents(y.averageLessonCents)} tone="muted" />
       </div>
+
+      <Card title="Where the money came from" actions={<span className="text-xs text-muted">Money received in {year}, by what it paid for</span>}>
+        <TableWrap><Table data-testid="income-by-kind">
+          <tbody>
+            {([
+              ["Tutoring lessons", income.tutoringCents],
+              ["College counseling", income.counselingCents],
+              ["Lessons with no category", income.uncategorizedLessonsCents],
+              ["Fees", income.feesCents],
+              ["Tips", income.tipsCents],
+              ["Other charges", income.otherChargesCents],
+              ["Not applied yet (credit on accounts)", income.unappliedCents],
+            ] as [string, number][]).filter(([, c]) => c !== 0).map(([label, cents]) => (
+              <tr key={label}><Td>{label}</Td><Td right num>{formatCents(cents)}</Td><Td right num className="w-20 text-muted">{income.receivedCents ? `${Math.round((cents / income.receivedCents) * 100)}%` : ""}</Td></tr>
+            ))}
+            <tr><Td className="font-semibold">Received</Td><Td right num className="font-semibold">{formatCents(income.receivedCents)}</Td><Td /></tr>
+            {income.refundsCents > 0 && <tr><Td className="text-muted">Refunds given</Td><Td right num className="text-owed">−{formatCents(income.refundsCents)}</Td><Td /></tr>}
+          </tbody>
+        </Table></TableWrap>
+        <p className="mt-2 text-xs text-muted">Set a lesson&apos;s category to split tutoring from college counseling. Imported lessons without one land in &quot;no category&quot;.</p>
+      </Card>
 
       <Card title="Month by month">
         <TableWrap><Table data-testid="months">
@@ -77,7 +99,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </Card>
       </div>
 
-      <Card title="Tutors">
+      <Card title="Tutors" actions={<Link href="/reports/payroll" className="text-sm text-brand hover:underline">Monthly pay and slips</Link>}>
         <TableWrap><Table>
           <thead><tr><Th>Tutor</Th><Th right>Lessons</Th><Th right>Hours</Th><Th right>Charged to families</Th><Th right>Pay</Th></tr></thead>
           <tbody>{tutors.map((t) => <tr key={t.tutorId}><Td>{t.tutorName}</Td><Td right num>{t.lessons}</Td><Td right num>{(t.minutes / 60).toFixed(1)}</Td><Td right num>{formatCents(t.chargedCents)}</Td><Td right num>{t.payCents == null ? <span className="text-muted">no rate set</span> : formatCents(t.payCents)}</Td></tr>)}</tbody>

@@ -7,6 +7,7 @@ import { RoleError, requireSession, requireWriter } from "@/src/auth/current";
 import { AiError, aiConfigured } from "@/src/ai/generate";
 import { discardDraft, draftExpenseFromReceipt, markApproved } from "@/src/ai/drafts";
 import { FileError, storeFile } from "@/src/services/files";
+import { setYearReported } from "@/src/services/taxFiling";
 import { ExpenseError, TREATMENTS, type ExpenseInput, type TaxTreatment, createCategory, createExpense, createRecurring, runRecurring, setTaxYear, updateExpense, voidExpense } from "@/src/services/expenses";
 
 export interface ActionState { error?: string; ok?: string; draftId?: string }
@@ -147,4 +148,20 @@ export async function taxYearAction(_p: ActionState, fd: FormData): Promise<Acti
   } catch (e) { return friendly(e); }
   refresh();
   return { ok: "Tax year saved" };
+}
+
+export async function setYearReportedAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const s = await requireWriter();
+    const year = Number(fd.get("year"));
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) return { error: "Pick a year" };
+    const reported = fd.get("reported") === "1";
+    const r = await setYearReported(prisma, s.organizationId, year, reported);
+    revalidatePath("/expenses/tax");
+    revalidatePath("/payments");
+    return { ok: reported ? `Marked ${r.payments} payments and ${r.expenses} expenses` : `Unmarked ${r.payments} payments and ${r.expenses} expenses` };
+  } catch (e) {
+    if (e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
 }

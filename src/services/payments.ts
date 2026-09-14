@@ -176,3 +176,43 @@ export async function listPayments(db: PrismaClient, organizationId: string, fro
     accountName: p.account.name,
   }));
 }
+
+export interface PaymentEdit {
+  /** Positive, in cents. A refund keeps its minus sign. */
+  amountCents: number;
+  paidOn: string;
+  method: PaymentMethodInput;
+  reference?: string | null;
+  notes?: string | null;
+  /** Refunds only, and required for them. */
+  refundReason?: string | null;
+}
+
+/**
+ * Correct a payment or refund in place. Voided rows and rows already marked as
+ * reported on a filed tax return cannot be changed.
+ */
+export async function updatePayment(db: PrismaClient, organizationId: string, paymentId: string, input: PaymentEdit) {
+  const p = await db.payment.findFirst({ where: { id: paymentId, organizationId } });
+  if (!p) throw new PaymentError("Payment not found");
+  if (p.voidedAt) throw new PaymentError("This payment is voided");
+  if (p.taxReportedAt) throw new PaymentError("This payment is marked as reported on a tax return. Unmark the year on the tax page first.");
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) throw new PaymentError("Amount must be more than zero");
+  if (!isDateStr(input.paidOn)) throw new PaymentError("Date is required");
+  if (!PAYMENT_METHODS.includes(input.method)) throw new PaymentError("Pick how it was paid");
+  const refund = p.kind === "REFUND";
+  if (refund && !input.refundReason?.trim()) throw new PaymentError("A reason is required for a refund");
+  const updated = await db.payment.update({
+    where: { id: paymentId },
+    data: {
+      amountCents: refund ? -input.amountCents : input.amountCents,
+      paidOn: dateOnlyFromStr(input.paidOn),
+      method: input.method,
+      reference: input.reference?.trim() || null,
+      notes: input.notes?.trim() || null,
+      ...(refund ? { refundReason: input.refundReason!.trim() } : {}),
+    },
+  });
+  await rebuildAccountAllocations(db, p.accountId);
+  return updated;
+}

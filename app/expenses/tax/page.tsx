@@ -3,7 +3,9 @@ import { requireSession } from "@/src/auth/current";
 import { formatCents, formatDate } from "@/src/lib/format";
 import { TREATMENT_LABEL, taxSummary } from "@/src/services/expenses";
 import { Card, Empty, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
-import { CategoryForm, TaxYearForm } from "./forms";
+import { CategoryForm, TaxFiledForm, TaxYearForm } from "./forms";
+import { taxFilingStatus } from "@/src/services/taxFiling";
+import { incomeByKind } from "@/src/services/reports";
 
 export const dynamic = "force-dynamic";
 
@@ -11,14 +13,15 @@ export default async function TaxPage({ searchParams }: { searchParams: Promise<
   const s = await requireSession();
   const q = await searchParams;
   const year = q.year && /^\d{4}$/.test(q.year) ? Number(q.year) : new Date().getFullYear();
-  const [sum, ty] = await Promise.all([taxSummary(prisma, s.organizationId, year), prisma.taxYear.findUnique({ where: { organizationId_year: { organizationId: s.organizationId, year } } })]);
+  const [sum, ty, filing, income] = await Promise.all([taxSummary(prisma, s.organizationId, year), prisma.taxYear.findUnique({ where: { organizationId_year: { organizationId: s.organizationId, year } } }), taxFilingStatus(prisma, s.organizationId, year), incomeByKind(prisma, s.organizationId, year)]);
   return (
     <div className="space-y-6">
       <PageHeader title={`Tax summary ${year}`} back={{ href: "/expenses", label: "Expenses" }}
         subtitle={sum.filedAt ? `Marked as filed on ${formatDate(sum.filedAt)}.` : "Not filed yet."}
         actions={<><LinkButton href={`/expenses/tax?year=${year - 1}`} variant="secondary">{year - 1}</LinkButton><LinkButton href={`/expenses/tax?year=${year + 1}`} variant="secondary">{year + 1}</LinkButton><LinkButton href={`/api/tax-csv?year=${year}`} variant="primary">Download CSV</LinkButton></>} />
       {sum.warnings.map((w) => <p key={w} className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{w}</p>)}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Income received" value={formatCents(income.receivedCents - income.refundsCents)} tone="credit" />
         <Stat label="Spent" value={formatCents(sum.grossCents)} />
         <Stat label="Deductible" value={formatCents(sum.deductibleCents)} tone="credit" data-testid="deductible" />
         <Stat label="Home office share" value={`${(sum.homeOfficeBps / 100).toFixed(2)}%`} tone="muted" />
@@ -41,6 +44,7 @@ export default async function TaxPage({ searchParams }: { searchParams: Promise<
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={`Home office for ${year}`}><TaxYearForm year={year} homeSqft={ty?.homeSqft ?? null} officeSqft={ty?.officeSqft ?? null} percent={ty?.homeOfficeBasisPoints != null ? (ty.homeOfficeBasisPoints / 100).toFixed(2) : ""} filed={!!ty?.filedAt} /></Card>
+        <Card title="Tax return"><TaxFiledForm year={year} status={filing} /></Card>
         <Card title="Add a category"><CategoryForm /></Card>
       </div>
     </div>

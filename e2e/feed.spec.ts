@@ -15,7 +15,7 @@ test("enable the calendar feed and fetch it without a session", async ({ page, r
   expect(body).toContain("BEGIN:VCALENDAR");
   expect(body).toContain("Victoria Li");
 
-  await page.getByRole("button", { name: "Turn off" }).click();
+  await page.locator("section", { hasText: "Calendar feed" }).getByRole("button", { name: "Turn off" }).click();
   await expect(page.getByText("Not enabled.")).toBeVisible();
   const after = await request.get(url);
   expect(after.status()).toBe(404);

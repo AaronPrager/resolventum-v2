@@ -5,8 +5,9 @@ import { prisma } from "@/src/db";
 import { RoleError, requireSession, requireWriter } from "@/src/auth/current";
 import {
   PAYMENT_METHODS, PaymentError, type PaymentMethodInput,
-  recordAdjustment, recordPayment, recordRefund, voidCharge, voidPayment,
+  recordAdjustment, recordPayment, recordRefund, updatePayment, voidCharge, voidPayment,
 } from "@/src/services/payments";
+import { redirect } from "next/navigation";
 
 export interface ActionState {
   error?: string;
@@ -81,4 +82,23 @@ export async function voidEntryAction(fd: FormData): Promise<void> {
   if (str(fd, "kind") === "payment") await voidPayment(prisma, str(fd, "id"), reason);
   else await voidCharge(prisma, str(fd, "id"), reason);
   refresh(accountId);
+}
+
+export async function updatePaymentAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "paymentId");
+  const back = str(fd, "returnTo");
+  try {
+    const session = await requireWriter();
+    const amountCents = dollarsToCents(str(fd, "amount"));
+    if (Number.isNaN(amountCents)) return { error: "Amount must be a number like 130 or 130.00" };
+    await updatePayment(prisma, session.organizationId, id, {
+      amountCents, paidOn: str(fd, "paidOn"), method: method(str(fd, "method")), reference: str(fd, "reference"), notes: str(fd, "notes"), refundReason: str(fd, "refundReason"),
+    });
+  } catch (e) {
+    if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath("/payments");
+  revalidatePath("/accounts", "layout");
+  redirect(back.startsWith("/") ? back : "/payments");
 }

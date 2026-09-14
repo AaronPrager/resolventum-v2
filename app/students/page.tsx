@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { formatDay } from "@/src/lib/format";
@@ -19,7 +20,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Students"
         subtitle={`${rows.length} students. Balance is the account's, so siblings share one.`}
-        actions={<LinkButton href={includeArchived ? "/students" : "/students?archived=1"} variant="secondary">{includeArchived ? "Hide archived" : "Show archived"}</LinkButton>}
+        actions={<><LinkButton href={includeArchived ? "/students" : "/students?archived=1"} variant="secondary">{includeArchived ? "Hide archived" : "Show archived"}</LinkButton>{session.role !== "ACCOUNTANT" && <LinkButton href="/students/new" variant="primary"><Plus aria-hidden />Add student</LinkButton>}</>}
       />
       <Card>
         <TableWrap>

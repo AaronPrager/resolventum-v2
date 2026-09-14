@@ -146,3 +146,63 @@ export async function studentsByRevenue(db: PrismaClient, organizationId: string
     group by s.id, name order by charged desc`;
   return rows.map((r) => ({ studentId: r.id, name: r.name, lessons: Number(r.lessons), minutes: Number(r.minutes), chargedCents: Number(r.charged) }));
 }
+
+export interface IncomeByKind {
+  tutoringCents: number;
+  counselingCents: number;
+  uncategorizedLessonsCents: number;
+  feesCents: number;
+  tipsCents: number;
+  otherChargesCents: number;
+  /** Money received in the year that has not been applied to any charge yet (credit on accounts). */
+  unappliedCents: number;
+  refundsCents: number;
+  receivedCents: number;
+}
+
+/**
+ * Money received in a year, split by what it paid for. A payment's allocations
+ * say which charges it covered, so a January payment for December lessons
+ * counts as tutoring income in January, which is when the cash came in.
+ */
+export async function incomeByKind(db: PrismaClient, organizationId: string, year: number): Promise<IncomeByKind> {
+  const from = dateOnlyFromStr(`${year}-01-01`);
+  const to = dateOnlyFromStr(`${year}-12-31`);
+  const [split, totals] = await Promise.all([
+    db.$queryRaw<{ bucket: string; cents: bigint }[]>`
+      select case
+               when c.kind = 'LESSON' and l.category = 'TUTORING' then 'tutoring'
+               when c.kind = 'LESSON' and l.category = 'COLLEGE_COUNSELING' then 'counseling'
+               when c.kind = 'LESSON' then 'lessons'
+               when c.kind = 'FEE' then 'fees'
+               when c.kind = 'TIP' then 'tips'
+               else 'other'
+             end as bucket,
+             coalesce(sum(al."amountCents"), 0)::bigint as cents
+      from "Allocation" al
+      join "Payment" p on p.id = al."paymentId"
+      join "Charge" c on c.id = al."chargeId"
+      left join "LessonStudent" ls on ls.id = c."lessonStudentId"
+      left join "Lesson" l on l.id = ls."lessonId"
+      where p."organizationId" = ${organizationId} and p."voidedAt" is null and p.kind = 'PAYMENT' and p."paidOn" between ${from} and ${to}
+      group by 1`,
+    db.$queryRaw<{ received: bigint; refunds: bigint }[]>`
+      select coalesce(sum(case when kind = 'PAYMENT' then "amountCents" else 0 end), 0)::bigint received,
+             coalesce(sum(case when kind = 'REFUND' then -"amountCents" else 0 end), 0)::bigint refunds
+      from "Payment" where "organizationId" = ${organizationId} and "voidedAt" is null and "paidOn" between ${from} and ${to}`,
+  ]);
+  const get = (b: string) => Number(split.find((r) => r.bucket === b)?.cents ?? 0);
+  const received = Number(totals[0]?.received ?? 0);
+  const applied = split.reduce((s, r) => s + Number(r.cents), 0);
+  return {
+    tutoringCents: get("tutoring"),
+    counselingCents: get("counseling"),
+    uncategorizedLessonsCents: get("lessons"),
+    feesCents: get("fees"),
+    tipsCents: get("tips"),
+    otherChargesCents: get("other"),
+    unappliedCents: received - applied,
+    refundsCents: Number(totals[0]?.refunds ?? 0),
+    receivedCents: received,
+  };
+}
