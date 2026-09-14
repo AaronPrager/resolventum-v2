@@ -28,33 +28,36 @@ function menus(role: string) {
   return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, settings] };
 }
 
-function NavLink({ it, active }: { it: Item; active: boolean }) {
+function NavLink({ it, active, collapsed }: { it: Item; active: boolean; collapsed?: boolean }) {
   const Icon = it.icon;
   return (
     <Link
       href={it.href}
       aria-current={active ? "page" : undefined}
-      className={`group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors ${
+      aria-label={collapsed ? it.label : undefined}
+      title={collapsed ? it.label : undefined}
+      className={`group flex h-8 items-center gap-2.5 rounded-lg text-sm transition-colors ${collapsed ? "justify-center px-0" : "px-2.5"} ${
         active ? "bg-surface font-medium text-fg shadow-xs ring-1 ring-line" : "text-muted hover:bg-surface-3/70 hover:text-fg"
       }`}
     >
       <Icon className={`size-[18px] shrink-0 ${active ? "text-brand" : "text-faint group-hover:text-muted"}`} strokeWidth={1.75} aria-hidden />
-      {it.label}
+      {!collapsed && it.label}
     </Link>
   );
 }
 
-export function SideNav({ role }: { role: string }) {
+/** The desktop menu. Folded, it is icons only with the name as a tooltip; the Money heading becomes a rule. */
+export function SideNav({ role, collapsed }: { role: string; collapsed?: boolean }) {
   const path = usePathname();
   const { teach, money } = menus(role);
   return (
     <nav className="flex flex-1 flex-col gap-5" aria-label="Main">
-      <div className="flex flex-col gap-0.5">{teach.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} />)}</div>
+      <div className="flex flex-col gap-0.5">{teach.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}</div>
       <div className="flex flex-col gap-0.5">
-        <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-faint">Money</div>
-        {money.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} />)}
+        {collapsed ? <div className="mx-2 mb-1 border-t border-line" aria-hidden /> : <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-faint">Money</div>}
+        {money.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}
       </div>
-      <div className="mt-auto flex flex-col gap-0.5"><NavLink it={settings} active={settings.match(path)} /></div>
+      <div className="mt-auto flex flex-col gap-0.5"><NavLink it={settings} active={settings.match(path)} collapsed={collapsed} /></div>
     </nav>
   );
 }

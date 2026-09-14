@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { LogOut } from "lucide-react";
-import { BottomNav, SideNav } from "./Nav";
+import { BottomNav } from "./Nav";
 import { Logo } from "./Logo";
+import { SIDEBAR_COOKIE, Sidebar } from "./Sidebar";
 import { currentSession, devAutoLogin } from "@/src/auth/current";
 import { logoutAction } from "./login/actions";
-import { Avatar } from "@/src/components/ui";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
@@ -31,31 +32,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     );
   }
   const who = session.name || session.email;
+  const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen">
         <div className="md:flex">
-          <aside className="hidden w-60 shrink-0 border-r border-line bg-surface-2 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-            <div className="px-4 pb-4 pt-4">
-              <Link href="/" className="rounded-lg"><Logo /></Link>
-              <div className="mt-3 truncate rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] font-medium shadow-xs" title={session.organizationName}>
-                {session.organizationName}
-              </div>
-            </div>
-            <div className="flex flex-1 flex-col overflow-y-auto px-3 pb-3"><SideNav role={session.role} /></div>
-            <div className="flex items-center gap-2.5 border-t border-line px-4 py-3">
-              <Avatar name={who} />
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-[13px] font-medium">{who}</div>
-                <div className="truncate text-xs text-muted">{session.role.toLowerCase()}{devAutoLogin() && <span className="ml-1.5 rounded bg-warn-soft px-1 py-px text-[10px] font-medium text-warn" title="Signed in automatically because DEV_AUTO_LOGIN is set">dev</span>}</div>
-              </div>
-              <form action={logoutAction}>
-                <button aria-label="Sign out" title="Sign out" className="inline-flex size-8 items-center justify-center rounded-lg text-faint hover:bg-surface-3 hover:text-fg">
-                  <LogOut className="size-4" aria-hidden />
-                </button>
-              </form>
-            </div>
-          </aside>
+          <Sidebar initialCollapsed={collapsed} role={session.role} organizationName={session.organizationName} who={who} dev={!!devAutoLogin()} logout={logoutAction} />
           <div className="min-w-0 flex-1">
             <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-surface/90 px-4 backdrop-blur md:hidden">
               <Link href="/"><Logo /></Link>
