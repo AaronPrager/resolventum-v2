@@ -53,7 +53,7 @@ export function StudentForm({ studentId, initial, accounts }: { studentId?: stri
         <Field label="Student email" className="col-span-1 sm:col-span-2" hint="For homework links"><Input type="email" name="email" defaultValue={initial.email} /></Field>
         <Field label="Student phone" className="col-span-1 sm:col-span-2"><Input name="phone" defaultValue={initial.phone} /></Field>
         {studentId && (
-          <Field label="Status" className="col-span-2" hint="Paused and graduated students stay in the pickers and drop out of the active count. Archive to hide them.">
+          <Field label="Status" className="col-span-2" hint="Paused or graduated: their scheduled lessons are cancelled, a weekly series that was only theirs ends, and they leave the lesson pickers. They stay on the list. Archive to hide them too.">
             <Select name="status" defaultValue={initial.status ?? "ACTIVE"}>
               <option value="ACTIVE">Active</option>
               <option value="PAUSED">Paused (taking a break)</option>

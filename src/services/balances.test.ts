@@ -12,7 +12,9 @@ describe("accountBalances (imported data)", () => {
   it("returns one row per account", async () => {
     const org = await prisma.organization.findFirstOrThrow();
     const rows = await accountBalances(prisma, org.id, asOf);
-    expect(rows.length).toBe(94);
+    // One row per account, however many the school has grown to since the import.
+    expect(rows.length).toBe(await prisma.account.count({ where: { organizationId: org.id } }));
+    expect(rows.length).toBeGreaterThanOrEqual(94);
   });
 
   it("knows who has credit and who owes", async () => {

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertTriangle, CalendarDays, NotebookPen, UserPlus } from "lucide-react";
+import { AlertTriangle, CalendarDays, Moon, NotebookPen, UserPlus } from "lucide-react";
 import { prisma } from "@/src/db";
 import { currentSession } from "@/src/auth/current";
 import { registrationOpen } from "@/src/auth/registration";
 import { Landing } from "./Landing";
-import { formatCents, formatWhen } from "@/src/lib/format";
+import { formatCents, formatDay, formatWhen } from "@/src/lib/format";
 import { ownerDashboard } from "@/src/services/dashboard";
 import { Balance, Card, Empty, LinkButton, PageHeader, Stat } from "@/src/components/ui";
 
@@ -67,6 +67,22 @@ export default async function Home() {
           <p className="mt-2 text-xs text-muted">Two or more cancelled or missed lessons in the last 30 days, or a balance over the threshold in Settings.</p>
         </Card>
       </div>
+
+      {d.dormant.length > 0 && (
+        <Card title={<span className="inline-flex items-center gap-2"><Moon className="size-4 text-muted" aria-hidden />Students with nothing going on ({d.dormant.length})</span>}>
+          <ul className="divide-y divide-line text-sm" data-testid="dormant">
+            {d.dormant.slice(0, 10).map((st) => (
+              <li key={st.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                <Link href={`/students/${st.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{st.name}</Link>
+                <span className="text-muted">{st.lastLessonAt ? `last lesson ${formatDay(st.lastLessonAt, s.timezone)}` : "never had a lesson"}</span>
+                {st.balanceCents !== 0 && <span className="text-muted"><Balance cents={st.balanceCents} /></span>}
+                <Link href={`/students/${st.id}/edit`} className="ml-auto text-brand hover:underline">Pause, graduate, or archive</Link>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted">Active students with no lesson in 60 days and nothing booked.{d.dormant.length > 10 && ` Showing 10 of ${d.dormant.length}.`}</p>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="This week">

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
 import { RoleError, requireWriter } from "@/src/auth/current";
 import { localDateOnly } from "@/src/lib/tz";
-import { archiveStudent, unarchiveStudent } from "@/src/services/students";
+import { archiveStudent, setStudentStatus, unarchiveStudent } from "@/src/services/students";
 import { auditAs } from "@/src/services/audit";
 import {
   PeopleError, type StudentInput, addProgressNote, createStudent, deleteProgressNote, moveStudent, updateProgressNote, updateStudent,
@@ -63,10 +63,12 @@ export async function updateStudentAction(_p: ActionState, fd: FormData): Promis
   const id = str(fd, "studentId");
   try {
     const session = await requireWriter();
-    const input = readStudent(fd);
-    const before = await prisma.student.findFirst({ where: { id, organizationId: session.organizationId }, select: { status: true } });
+    const { status, ...input } = readStudent(fd);
     const st = await updateStudent(prisma, session.organizationId, id, input);
-    if (before && input.status && before.status !== input.status) await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${before.status.toLowerCase()} to ${input.status.toLowerCase()}` });
+    if (status) {
+      const r = await setStudentStatus(prisma, session.organizationId, id, status);
+      if (r.changed) await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${st.status.toLowerCase()} to ${status.toLowerCase()}${r.cancelledLessons ? `, ${r.cancelledLessons} lessons cancelled` : ""}${r.endedSeries ? `, ${r.endedSeries} series ended` : ""}` });
+    }
   } catch (e) {
     const m = known(e);
     if (m) return { error: m };

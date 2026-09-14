@@ -78,15 +78,11 @@ export type StudentDetail = NonNullable<Awaited<ReturnType<typeof studentDetail>
 export class StudentError extends Error {}
 
 /**
- * Archive a student: they leave the pickers and the default list, every
- * scheduled lesson of theirs from now on is cancelled (charges voided), and a
- * weekly series that only they were in stops today. History and balance stay.
+ * Stop a student's future: every scheduled solo lesson from now on is
+ * cancelled with the charge released, and a weekly series that only they were
+ * in ends today. Group lessons go on for the others. Used by archive and pause.
  */
-export async function archiveStudent(db: PrismaClient, organizationId: string, studentId: string, now = new Date()): Promise<{ cancelledLessons: number; endedSeries: number }> {
-  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
-  if (!student) throw new StudentError("Student not found");
-  if (student.archivedAt) return { cancelledLessons: 0, endedSeries: 0 };
-
+export async function stopFutureLessons(db: PrismaClient, studentId: string, reason: string, now = new Date()): Promise<{ cancelledLessons: number; endedSeries: number }> {
   const seats = await db.lessonStudent.findMany({
     where: { studentId, lesson: { startsAt: { gt: now }, status: "SCHEDULED", deletedAt: null } },
     include: { lesson: { select: { id: true, seriesId: true, _count: { select: { students: true } } } } },
@@ -96,7 +92,7 @@ export async function archiveStudent(db: PrismaClient, organizationId: string, s
   const seriesIds = new Set<string>();
   for (const seat of seats) {
     if (seat.lesson._count.students > 1) continue; // a group lesson goes on for the others
-    await cancelLesson(db, seat.lesson.id, "Student archived", { chargeAnyway: false });
+    await cancelLesson(db, seat.lesson.id, reason, { chargeAnyway: false });
     cancelledLessons += 1;
     if (seat.lesson.seriesId) seriesIds.add(seat.lesson.seriesId);
   }
@@ -107,8 +103,63 @@ export async function archiveStudent(db: PrismaClient, organizationId: string, s
     await db.lessonSeries.update({ where: { id: seriesId }, data: { endsOn: new Date(now.toISOString().slice(0, 10)) } });
     endedSeries += 1;
   }
-  await db.student.update({ where: { id: studentId }, data: { archivedAt: now } });
   return { cancelledLessons, endedSeries };
+}
+
+/**
+ * Archive a student: they leave the pickers and the default list, every
+ * scheduled lesson of theirs from now on is cancelled (charges voided), and a
+ * weekly series that only they were in stops today. History and balance stay.
+ */
+export async function archiveStudent(db: PrismaClient, organizationId: string, studentId: string, now = new Date()): Promise<{ cancelledLessons: number; endedSeries: number }> {
+  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
+  if (!student) throw new StudentError("Student not found");
+  if (student.archivedAt) return { cancelledLessons: 0, endedSeries: 0 };
+  const r = await stopFutureLessons(db, studentId, "Student archived", now);
+  await db.student.update({ where: { id: studentId }, data: { archivedAt: now } });
+  return r;
+}
+
+export type StudentStatus = "ACTIVE" | "PAUSED" | "GRADUATED";
+
+/**
+ * Change a student's status. Going from active to paused or graduated stops
+ * their future lessons the way archiving does; they stay on the list and the
+ * page, only out of the pickers. Coming back to active restores nothing: the
+ * owner books the next lesson or series by hand.
+ */
+export async function setStudentStatus(db: PrismaClient, organizationId: string, studentId: string, status: StudentStatus, now = new Date()): Promise<{ changed: boolean; cancelledLessons: number; endedSeries: number }> {
+  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
+  if (!student) throw new StudentError("Student not found");
+  if (student.status === status) return { changed: false, cancelledLessons: 0, endedSeries: 0 };
+  const stopped = status === "ACTIVE" ? { cancelledLessons: 0, endedSeries: 0 } : await stopFutureLessons(db, studentId, status === "PAUSED" ? "Student paused" : "Student graduated", now);
+  await db.student.update({ where: { id: studentId }, data: { status } });
+  return { changed: true, ...stopped };
+}
+
+export interface ArchiveCandidate { id: string; name: string; lastLessonAt: Date | null; balanceCents: number }
+
+/**
+ * Active students who look dormant: no lesson taught in `days` days, nothing
+ * scheduled ahead, and on the books longer than that. The dashboard shows
+ * them so the owner can pause, graduate, or archive by hand.
+ */
+export async function archiveCandidates(db: PrismaClient, organizationId: string, now = new Date(), days = 60): Promise<ArchiveCandidate[]> {
+  const since = new Date(now.getTime() - days * 86400000);
+  const todayStr = now.toISOString().slice(0, 10);
+  const rows = await db.$queryRaw<{ id: string; firstName: string; lastName: string; lastLessonAt: Date | null; balance: bigint }[]>`
+    select s.id, s."firstName", s."lastName",
+      (select max(l."startsAt") from "LessonStudent" ls join "Lesson" l on l.id = ls."lessonId"
+        where ls."studentId" = s.id and l."deletedAt" is null and l.status not in ('CANCELLED', 'NO_SHOW')) as "lastLessonAt",
+      coalesce((select sum(c."amountCents") from "Charge" c where c."accountId" = s."accountId" and c."voidedAt" is null and c."chargedOn" <= ${todayStr}::date), 0)::bigint
+      - coalesce((select sum(p."amountCents") from "Payment" p where p."accountId" = s."accountId" and p."voidedAt" is null and p."paidOn" <= ${todayStr}::date), 0)::bigint as balance
+    from "Student" s
+    where s."organizationId" = ${organizationId} and s."deletedAt" is null and s."archivedAt" is null and s.status = 'ACTIVE'
+      and s."createdAt" < ${since}
+      and not exists (select 1 from "LessonStudent" ls join "Lesson" l on l.id = ls."lessonId"
+        where ls."studentId" = s.id and l."deletedAt" is null and l.status <> 'CANCELLED' and l."startsAt" >= ${since})
+    order by "lastLessonAt" asc nulls first, s."lastName", s."firstName"`;
+  return rows.map((r) => ({ id: r.id, name: `${r.firstName} ${r.lastName}`, lastLessonAt: r.lastLessonAt, balanceCents: Number(r.balance) }));
 }
 
 /** Bring an archived student back. Cancelled lessons stay cancelled; restore the ones you want. */
@@ -118,10 +169,10 @@ export async function unarchiveStudent(db: PrismaClient, organizationId: string,
   await db.student.update({ where: { id: studentId }, data: { archivedAt: null } });
 }
 
-/** Students for the lesson form's pickers: active ones, last name first, with their usual price and subject. */
+/** Students for the lesson form's pickers: active ones only (not paused, graduated, or archived), last name first, with their usual price and subject. */
 export async function studentChoices(db: PrismaClient, organizationId: string, include: string[] = []) {
   const rows = await db.student.findMany({
-    where: { organizationId, deletedAt: null, OR: [{ archivedAt: null }, { id: { in: include } }] },
+    where: { organizationId, deletedAt: null, OR: [{ archivedAt: null, status: "ACTIVE" }, { id: { in: include } }] },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     select: { id: true, firstName: true, lastName: true, defaultPriceCents: true, defaultSubject: true },
   });

@@ -75,15 +75,16 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
 /**
  * Generate missing lessons for every open-ended series up to the horizon.
  * Copies subject, tutor, roster, prices, and the rest from the latest lesson
- * of the series. Students who are archived since are left off; a series whose
- * whole roster is gone stops growing. Returns the number of lessons created.
+ * of the series. Students who are archived, paused, or graduated since are
+ * left off; a series whose whole roster is gone stops growing. Returns the
+ * number of lessons created.
  */
 export async function extendOpenSeries(db: PrismaClient, organizationId: string, now = new Date()): Promise<number> {
   const org = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
   const until = horizonDateStr(org.timezone, now);
   const series = await db.lessonSeries.findMany({
     where: { organizationId, endsOn: null },
-    include: { lessons: { where: { deletedAt: null }, orderBy: { startsAt: "desc" }, take: 1, include: { students: { include: { student: { select: { id: true, accountId: true, organizationId: true, deletedAt: true, archivedAt: true } } } } } } },
+    include: { lessons: { where: { deletedAt: null }, orderBy: { startsAt: "desc" }, take: 1, include: { students: { include: { student: { select: { id: true, accountId: true, organizationId: true, deletedAt: true, archivedAt: true, status: true } } } } } } },
   });
   // Latest date each series ever reached, deleted lessons included, so a deleted one is not made again.
   const reached = new Map(
@@ -96,7 +97,7 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
   for (const s of series) {
     const last = s.lessons[0];
     if (!last) continue;
-    const roster = last.students.filter((x) => !x.student.deletedAt && !x.student.archivedAt).map((x) => ({ studentId: x.studentId, priceCents: x.priceCents, student: x.student }));
+    const roster = last.students.filter((x) => !x.student.deletedAt && !x.student.archivedAt && x.student.status === "ACTIVE").map((x) => ({ studentId: x.studentId, priceCents: x.priceCents, student: x.student }));
     if (last.students.length > 0 && roster.length === 0) continue; // everyone left
     const { intervalWeeks } = parseRule(s.rrule);
     const dates = weeklyOccurrencesAfter({ firstStartsAt: s.startsAt, timeZone: org.timezone, intervalWeeks, after: reached.get(s.id) ?? last.startsAt, until, skip: s.skipHolidays ? holidays : [] });

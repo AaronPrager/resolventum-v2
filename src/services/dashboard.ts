@@ -10,6 +10,7 @@ import { accountBalances } from "./balances";
 import { payRun } from "./payroll";
 import { lessonsMissingNotes } from "./sessionNotes";
 import { leadCounts } from "./leads";
+import { archiveCandidates } from "./students";
 
 function addDays(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -33,7 +34,7 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
   const monthEnd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
   const asOf = new Date(`${today}T00:00:00Z`);
 
-  const [weekLessons, monthPayments, monthCharges, balances, pay, missing, leads, students, slipping, org] = await Promise.all([
+  const [weekLessons, monthPayments, monthCharges, balances, pay, missing, leads, students, slipping, org, dormant] = await Promise.all([
     db.lesson.findMany({
       where: { organizationId, deletedAt: null, allDay: false, startsAt: { gte: zonedToUtc(weekStart, "00:00", timeZone), lt: zonedToUtc(weekEnd, "00:00", timeZone) } },
       select: { status: true, durationMin: true, students: { select: { priceCents: true } } },
@@ -52,6 +53,7 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
         and l."startsAt" >= ${new Date(now.getTime() - 30 * 86400000)} and l."startsAt" <= ${now}
       group by a.id, a.name having count(*) >= 2 order by missed desc limit 10`,
     db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { lowBalanceAlertCents: true } }),
+    archiveCandidates(db, organizationId, now),
   ]);
 
   const live = weekLessons.filter((l) => l.status !== "CANCELLED");
@@ -66,7 +68,7 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
     chargedCents: live.reduce((s, l) => s + l.students.reduce((x, st) => x + st.priceCents, 0), 0),
   };
   const collected = Number(monthPayments.find((p) => p.kind === "PAYMENT")?._sum.amountCents ?? 0);
-  const refunded = -Number(monthPayments.find((p) => p.kind === "REFUND")?._sum.amountCents ?? 0);
+  const refunded = Math.abs(Number(monthPayments.find((p) => p.kind === "REFUND")?._sum.amountCents ?? 0));
   const lessonsCharged = Number(monthCharges._sum.amountCents ?? 0);
   const monthly = { month, collectedCents: collected, refundedCents: refunded, lessonsChargedCents: lessonsCharged, lessonsCharged: monthCharges._count._all, tutorPayCents: pay.totalCents, marginCents: lessonsCharged - pay.totalCents, unpricedLessons: pay.unpriced };
 
@@ -87,5 +89,7 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
     notesMissingLessons: missing.slice(0, 8),
     leads: { open: leads.INQUIRY + leads.CONSULT_BOOKED + leads.TRIAL, inquiries: leads.INQUIRY },
     students: { active: count("ACTIVE"), paused: count("PAUSED"), graduated: count("GRADUATED") },
+    /** Active students with no lesson in 60 days and nothing booked: pause, graduate, or archive them. */
+    dormant,
   };
 }

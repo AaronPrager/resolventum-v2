@@ -1,7 +1,7 @@
 /** Runs against the local resolventum_v2 database after `npm run import`. Cleans up what it makes. */
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "../db";
-import { archiveStudent, listStudents, unarchiveStudent } from "./students";
+import { archiveCandidates, archiveStudent, listStudents, setStudentStatus, studentChoices, unarchiveStudent } from "./students";
 import { createSeries } from "./series";
 
 const SUBJECT = `Archive test ${Date.now()}`;
@@ -14,7 +14,7 @@ afterAll(async () => {
   await prisma.lessonStudent.deleteMany({ where: { lessonId: { in: lessons.map((l) => l.id) } } });
   await prisma.lesson.deleteMany({ where: { id: { in: lessons.map((l) => l.id) } } });
   await prisma.lessonSeries.deleteMany({ where: { id: { in: lessons.map((l) => l.seriesId).filter((x): x is string => !!x) } } });
-  if (studentId) await prisma.student.update({ where: { id: studentId }, data: { archivedAt: null } });
+  if (studentId) await prisma.student.update({ where: { id: studentId }, data: { archivedAt: null, status: "ACTIVE" } });
 });
 
 describe("archiving a student", () => {
@@ -46,5 +46,35 @@ describe("archiving a student", () => {
 
   it("refuses a student from another school", async () => {
     await expect(archiveStudent(prisma, "not-an-org", studentId)).rejects.toThrow(/not found/);
+  });
+});
+
+describe("student status", () => {
+  it("pausing stops future solo lessons, leaves the pickers, keeps the list; active again restores nothing", async () => {
+    const org = await prisma.organization.findFirstOrThrow();
+    const student = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id, firstName: "Estella", archivedAt: null } });
+    const now = new Date("2030-06-01T12:00:00Z");
+    const { series } = await createSeries(prisma, { studentId: student.id, startsAt: new Date("2030-06-04T21:00:00Z"), durationMin: 60, priceCents: 13000, subject: SUBJECT, intervalWeeks: 1, until: "2030-07-01" });
+    const r = await setStudentStatus(prisma, org.id, student.id, "PAUSED", now);
+    expect(r).toMatchObject({ changed: true, cancelledLessons: 4, endedSeries: 1 });
+    expect(await prisma.lesson.count({ where: { seriesId: series.id, status: "SCHEDULED" } })).toBe(0);
+    expect((await prisma.charge.findFirst({ where: { lessonStudent: { lesson: { seriesId: series.id } } } }))?.voidReason).toBe("Student paused");
+    expect((await studentChoices(prisma, org.id)).some((c) => c.id === student.id)).toBe(false);
+    expect((await studentChoices(prisma, org.id, [student.id])).some((c) => c.id === student.id)).toBe(true);
+    expect((await listStudents(prisma, org.id, new Date("2030-06-01T00:00:00Z"))).find((s) => s.id === student.id)?.status).toBe("PAUSED");
+    expect(await setStudentStatus(prisma, org.id, student.id, "PAUSED", now)).toMatchObject({ changed: false });
+    expect(await setStudentStatus(prisma, org.id, student.id, "ACTIVE", now)).toMatchObject({ changed: true, cancelledLessons: 0 });
+    expect(await prisma.lesson.count({ where: { seriesId: series.id, status: "SCHEDULED" } })).toBe(0);
+  });
+
+  it("lists active students with nothing in 60 days as archive candidates", async () => {
+    const org = await prisma.organization.findFirstOrThrow();
+    const estella = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id, firstName: "Estella" } });
+    // Well after every lesson in the import, everyone is dormant; the day after her last lesson, Estella is not.
+    const far = await archiveCandidates(prisma, org.id, new Date("2040-01-01T00:00:00Z"));
+    expect(far.map((c) => c.id)).toContain(estella.id);
+    expect(far.find((c) => c.id === estella.id)?.lastLessonAt).not.toBeNull();
+    const soon = await archiveCandidates(prisma, org.id, new Date("2025-12-14T00:00:00Z"));
+    expect(soon.map((c) => c.id)).not.toContain(estella.id);
   });
 });
