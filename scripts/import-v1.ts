@@ -409,7 +409,12 @@ async function main() {
     const subjectFor = (row: Record<string, any>): string => {
       const st = row.studentId ? studentById.get(row.studentId) : null;
       const s = String(row.subject ?? "").trim();
-      return st && s.toLowerCase() === `${st.firstName} ${st.lastName}`.trim().toLowerCase() ? "" : s;
+      if (!st) return s;
+      const name = `${st.firstName} ${st.lastName}`.trim().toLowerCase();
+      if (s.toLowerCase() === name) return "";
+      // "Eva Laffer - Math" and "Eva Laffer – Math" become "Math".
+      const m = /^(.+?)\s*[-–—:]\s*(.+)$/.exec(s);
+      return m && m[1].trim().toLowerCase() === name ? m[2].trim() : s;
     };
     lessonRows.push({
       id: l.id,
@@ -625,7 +630,7 @@ async function main() {
         id: s.id,
         organizationId: orgId,
         studentId: s.studentId,
-        title: s.fileNameSnapshot ?? s.originalName,
+        title: fixName(s.fileNameSnapshot ?? s.originalName),
         description: "Shared from the library (imported from v1 without an assignment)",
         status: "ASSIGNED",
         createdById: s.tutorId,

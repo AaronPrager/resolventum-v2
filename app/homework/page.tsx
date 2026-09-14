@@ -42,8 +42,8 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="hover:bg-surface-2">
-                    <Td><Link href={`/students/${r.studentId}`} className="text-brand hover:underline">{r.studentName}</Link></Td>
-                    <Td><Link href={`/homework/${r.id}`} className="font-medium text-brand hover:underline">{r.title}</Link></Td>
+                    <Td><Link href={`/students/${r.studentId}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{r.studentName}</Link></Td>
+                    <Td><Link href={`/homework/${r.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{r.title}</Link></Td>
                     <Td num>{r.dueOn ? formatDate(r.dueOn) : <span className="text-muted">none</span>}</Td>
                     <Td><Badge tone={TONE[r.status]}>{r.status === "SOLVED" ? "to review" : r.status.toLowerCase()}</Badge></Td>
                     <Td right num>{r.submissions}</Td>

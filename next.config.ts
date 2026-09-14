@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
   agentRules: false,
   poweredByHeader: false,
+  devIndicators: false,
   async headers() {
     return [
       {

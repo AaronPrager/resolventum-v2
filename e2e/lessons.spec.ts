@@ -28,6 +28,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await expect(page.getByText("credit $130.00")).toBeVisible();
 
   // Add a future lesson at 130.
+  await page.getByText("New lesson for Estella").click();
   const form = page.getByTestId("lesson-form");
   await form.getByLabel("Date").fill("2027-03-20");
   await form.getByLabel("Time").fill("16:00");
@@ -76,6 +77,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
 test("the form rejects a bad price", async ({ page }) => {
   const student = await prisma.student.findFirstOrThrow({ where: { firstName: "Estella", lastName: "Urman" } });
   await page.goto(`/students/${student.id}`);
+  await page.getByText("New lesson for Estella").click();
   const form = page.getByTestId("lesson-form");
   await form.getByLabel("Subject").fill(SUBJECT);
   await form.getByLabel("Price").fill("abc");

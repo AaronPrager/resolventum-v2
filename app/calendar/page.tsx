@@ -4,7 +4,8 @@ import { requireSession } from "@/src/auth/current";
 import { formatCents, formatTime } from "@/src/lib/format";
 import { localDateStr, zonedToUtc } from "@/src/lib/tz";
 import { calendarLessons, type CalendarLesson } from "@/src/services/calendar";
-import { Empty, LinkButton, PageHeader } from "@/src/components/ui";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ButtonGroup, Empty, LinkButton, PageHeader } from "@/src/components/ui";
 import { DayCell } from "./DayCell";
 import { EventChip } from "./EventChip";
 import { TutorFilter } from "./TutorFilter";
@@ -48,6 +49,18 @@ function shortTime(date: Date, tz: string): string {
   return formatTime(date, tz).replace(":00", "").replace(" ", "");
 }
 const isDate = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/** The tutor's colour (or the brand) as a CSS variable, for the tinted chips. */
+function tint(color?: string | null) {
+  return { "--c": color ?? "var(--brand)" } as React.CSSProperties;
+}
+/** Chip colours: a light wash of the tutor colour with a solid edge; cancelled ones go grey and struck through. */
+function chipTone(cancelled: boolean, allDay = false) {
+  if (cancelled) return "bg-surface-2 text-faint line-through";
+  return allDay
+    ? "bg-[var(--c)] text-white hover:opacity-90"
+    : "border-l-[3px] border-[var(--c)] bg-[color-mix(in_oklab,var(--c)_13%,var(--surface))] text-fg hover:bg-[color-mix(in_oklab,var(--c)_22%,var(--surface))]";
+}
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ day?: string; week?: string; month?: string; view?: string; tutor?: string }> }) {
   const q = await searchParams;
@@ -103,17 +116,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           actions={
             <>
               {controls}
-              <LinkButton href={`/calendar?day=${addDays(day, -1)}${tq}`} variant="secondary" aria-label="Previous day">Previous</LinkButton>
-              <LinkButton href={`/calendar?day=${today}${tq}`} variant="secondary">Today</LinkButton>
-              <LinkButton href={`/calendar?day=${addDays(day, 1)}${tq}`} variant="secondary" aria-label="Next day">Next</LinkButton>
-              <LinkButton href={`/lessons/new?date=${day}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary">New lesson</LinkButton>
+              <ButtonGroup>
+                <Link href={`/calendar?day=${addDays(day, -1)}${tq}`} aria-label="Previous day" className="text-muted hover:bg-surface-2 hover:text-fg"><ChevronLeft className="size-4" aria-hidden /></Link>
+                <Link href={`/calendar?day=${today}${tq}`} className="font-medium hover:bg-surface-2">Today</Link>
+                <Link href={`/calendar?day=${addDays(day, 1)}${tq}`} aria-label="Next day" className="text-muted hover:bg-surface-2 hover:text-fg"><ChevronRight className="size-4" aria-hidden /></Link>
+              </ButtonGroup>
+              <LinkButton href={`/lessons/new?date=${day}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary"><Plus aria-hidden />New lesson</LinkButton>
             </>
           }
         />
         {lessons.length === 0 ? <Empty>Nothing on this day.</Empty> : (
           <div className="space-y-4" data-testid="day">
             {(grouped ? groups : [{ key: "all", name: "", color: null, items: lessons }]).map((g) => (
-              <section key={g.key} className="rounded-lg border border-line bg-surface">
+              <section key={g.key} className="overflow-hidden rounded-xl border border-line bg-surface shadow-xs">
                 {grouped && (
                   <header className="flex items-center gap-2 border-b border-line px-4 py-2 text-sm font-semibold">
                     <span className="inline-block h-3 w-3 rounded-full" style={{ background: g.color ?? "var(--brand)" }} aria-hidden />
@@ -133,8 +148,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                               charged={l.students.length > 0 && l.status !== "CANCELLED"}
                               what={`${[l.students.map((s) => s.name).join(", "), l.subject].filter(Boolean).join(" · ")}, ${fmtDay(l.day)}${l.allDay ? ", all day" : ` at ${formatTime(l.startsAt, tz)}`}`}
                               href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
-                          className={`flex items-start gap-4 border-l-4 px-4 py-3 hover:bg-surface-2 ${cancelled ? "text-muted line-through" : ""}`}
-                          style={cancelled ? { borderLeftColor: "var(--line)" } : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
+                          className={`flex items-start gap-4 border-l-[3px] px-4 py-3 transition-colors hover:bg-surface-2 ${cancelled ? "border-line text-faint line-through" : "border-[var(--c)]"}`}
+                          style={tint(l.tutor?.color)}
                         >
                           <div className="w-28 shrink-0 tabular-nums">
                             <div className="font-semibold">{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</div>
@@ -183,37 +198,64 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           actions={
             <>
               {controls}
-              <LinkButton href={`/calendar?month=${addMonths(month, -1)}${tq}`} variant="secondary" aria-label="Previous month">Previous</LinkButton>
-              <LinkButton href={`/calendar${tutor ? `?tutor=${tutor}` : ""}`} variant="secondary">Today</LinkButton>
-              <LinkButton href={`/calendar?month=${addMonths(month, 1)}${tq}`} variant="secondary" aria-label="Next month">Next</LinkButton>
-              <LinkButton href={`/lessons/new?date=${today}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary">New lesson</LinkButton>
+              <ButtonGroup>
+                <Link href={`/calendar?month=${addMonths(month, -1)}${tq}`} aria-label="Previous month" className="text-muted hover:bg-surface-2 hover:text-fg"><ChevronLeft className="size-4" aria-hidden /></Link>
+                <Link href={`/calendar${tutor ? `?tutor=${tutor}` : ""}`} className="font-medium hover:bg-surface-2">Today</Link>
+                <Link href={`/calendar?month=${addMonths(month, 1)}${tq}`} aria-label="Next month" className="text-muted hover:bg-surface-2 hover:text-fg"><ChevronRight className="size-4" aria-hidden /></Link>
+              </ButtonGroup>
+              <LinkButton href={`/lessons/new?date=${today}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary"><Plus aria-hidden />New lesson</LinkButton>
             </>
           }
         />
 
-        <div className="overflow-x-auto">
-          <div className="min-w-[640px]" data-testid="month">
-            <div className="grid grid-cols-7 text-xs font-medium uppercase tracking-wide text-muted">
-              {DAY_NAMES.map((n) => <div key={n} className="px-2 py-1">{n}</div>)}
+        <div>
+          <div data-testid="month">
+            <div className="grid grid-cols-7 pb-2 text-xs font-medium text-muted">
+              {DAY_NAMES.map((n) => (
+                <div key={n} className="px-2 text-center sm:text-left">
+                  <span className="sm:hidden">{n[0]}</span>
+                  <span className="hidden sm:inline">{n}</span>
+                </div>
+              ))}
             </div>
-            <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line">
+            <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-line bg-line shadow-xs">
               {days.map((d) => {
                 const items = byDay.get(d) ?? [];
                 const isToday = d === today;
                 const outside = d < first || d >= nextMonth;
                 return (
-                  <DayCell key={d} day={d} newHref={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`} className={`min-h-28 p-1.5 ${outside ? "bg-surface-2" : "bg-surface"}`}>
+                  <DayCell
+                    key={d}
+                    day={d}
+                    newHref={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`}
+                    className={`group relative min-h-16 p-1 sm:min-h-32 sm:p-1.5 ${outside ? "bg-surface-2" : "bg-surface"}`}
+                  >
                     <header className="mb-1 flex items-center justify-between">
                       <Link
                         href={`/calendar?day=${d}${tq}`}
-                        className={`rounded px-1 text-xs tabular-nums hover:bg-brand-soft hover:text-brand ${isToday ? "bg-brand font-semibold text-white hover:bg-brand hover:text-white" : outside ? "text-muted" : "text-fg"}`}
+                        className={`inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums after:absolute after:inset-0 sm:after:hidden ${
+                          isToday ? "bg-brand font-semibold text-white" : outside ? "text-faint hover:bg-surface-3" : "font-medium text-fg hover:bg-surface-3"
+                        }`}
                         aria-label={`Day view for ${fmtDay(d)}`}
                       >
                         {String(Number(d.slice(8)))}
                       </Link>
-                      <Link href={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`} className="rounded px-1 text-xs text-muted opacity-60 hover:bg-brand-soft hover:text-brand hover:opacity-100" aria-label={`New lesson on ${d}`}>+</Link>
+                      <Link
+                        href={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`}
+                        className="hidden size-6 items-center justify-center rounded-md text-faint opacity-0 hover:bg-brand-soft hover:text-brand focus:opacity-100 group-hover:opacity-100 sm:inline-flex"
+                        aria-label={`New lesson on ${d}`}
+                      >
+                        <Plus className="size-3.5" aria-hidden />
+                      </Link>
                     </header>
-                    <ul className="space-y-0.5">
+                    {items.length > 0 && (
+                      <div className="flex flex-wrap justify-center gap-0.5 sm:hidden" aria-hidden>
+                        {items.slice(0, 6).map((l) => (
+                          <span key={l.id} className={`size-1.5 rounded-full ${l.status === "CANCELLED" ? "bg-line-strong" : ""}`} style={l.status === "CANCELLED" ? undefined : { background: l.tutor?.color ?? "var(--brand)" }} />
+                        ))}
+                      </div>
+                    )}
+                    <ul className="hidden space-y-0.5 sm:block">
                       {items.map((l) => {
                         const cancelled = l.status === "CANCELLED";
                         const names = l.students.map((s) => s.name.split(" ")[0]).join(", ") || l.subject || "Event";
@@ -228,10 +270,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                               what={`${[l.students.map((s) => s.name).join(", "), l.subject].filter(Boolean).join(" · ")}, ${fmtDay(l.day)}${l.allDay ? ", all day" : ` at ${formatTime(l.startsAt, tz)}`}`}
                               href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
                               title={`${l.allDay ? "All day" : formatTime(l.startsAt, tz)} ${full}${l.subject ? ` · ${l.subject}` : ""}${l.tutor ? ` · ${l.tutor.name}` : ""}${cancelled ? " (cancelled)" : ""}`}
-                              className={`block truncate rounded border-l-2 px-1 py-0.5 text-[11px] leading-tight hover:bg-surface-3 ${cancelled ? "border-line text-muted line-through" : "bg-surface-2"}`}
-                              style={cancelled ? undefined : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
+                              className={`block truncate rounded-md px-1.5 py-[3px] text-[11.5px] leading-tight transition-colors ${chipTone(cancelled, l.allDay)}`}
+                              style={tint(l.tutor?.color)}
                             >
-                              <span className="tabular-nums text-muted">{l.allDay ? "" : shortTime(l.startsAt, tz)}</span> {names}
+                              {!l.allDay && <span className="mr-1 tabular-nums opacity-70">{shortTime(l.startsAt, tz)}</span>}
+                              <span className="font-medium">{names}</span>
                             </EventChip>
                           </li>
                         );
@@ -264,10 +307,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         actions={
           <>
             {controls}
-            <LinkButton href={`/calendar?week=${addDays(monday, -7)}${tq}`} variant="secondary" aria-label="Previous week">Previous</LinkButton>
-            <LinkButton href={`/calendar?week=${today}${tq}`} variant="secondary">Today</LinkButton>
-            <LinkButton href={`/calendar?week=${addDays(monday, 7)}${tq}`} variant="secondary" aria-label="Next week">Next</LinkButton>
-            <LinkButton href={`/lessons/new?date=${today}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary">New lesson</LinkButton>
+            <ButtonGroup>
+                <Link href={`/calendar?week=${addDays(monday, -7)}${tq}`} aria-label="Previous week" className="text-muted hover:bg-surface-2 hover:text-fg"><ChevronLeft className="size-4" aria-hidden /></Link>
+                <Link href={`/calendar?week=${today}${tq}`} className="font-medium hover:bg-surface-2">Today</Link>
+                <Link href={`/calendar?week=${addDays(monday, 7)}${tq}`} aria-label="Next week" className="text-muted hover:bg-surface-2 hover:text-fg"><ChevronRight className="size-4" aria-hidden /></Link>
+              </ButtonGroup>
+            <LinkButton href={`/lessons/new?date=${today}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary"><Plus aria-hidden />New lesson</LinkButton>
           </>
         }
       />
@@ -277,12 +322,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           const items = byDay.get(d) ?? [];
           const isToday = d === today;
           return (
-            <section key={d} className={`min-h-36 rounded-lg border bg-surface p-2 ${isToday ? "border-brand ring-1 ring-brand/30" : "border-line"}`} data-day={d}>
+            <section key={d} className={`group min-h-40 rounded-xl border bg-surface p-2 shadow-xs ${isToday ? "border-brand/50 ring-3 ring-brand/10" : "border-line"}`} data-day={d}>
               <header className="mb-2 flex items-baseline justify-between text-sm">
-                <Link href={`/calendar?day=${d}${tq}`} className={`rounded px-1 hover:bg-brand-soft hover:text-brand ${isToday ? "font-semibold text-brand" : "text-muted"}`} aria-label={`Day view for ${fmtDay(d)}`}>
-                  {DAY_NAMES[i]} <span className="text-fg">{fmtDay(d)}</span>
+                <Link href={`/calendar?day=${d}${tq}`} className="flex items-baseline gap-1.5 rounded-md px-1 hover:bg-surface-3" aria-label={`Day view for ${fmtDay(d)}`}>
+                  <span className={`text-xs font-medium ${isToday ? "text-brand" : "text-muted"}`}>{DAY_NAMES[i]}</span>
+                  <span className={`text-sm font-semibold tabular-nums ${isToday ? "text-brand" : ""}`}>{fmtDay(d)}</span>
                 </Link>
-                <Link href={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`} className="rounded px-1.5 text-muted hover:bg-brand-soft hover:text-brand" aria-label={`New lesson on ${d}`}>+</Link>
+                <Link href={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`} className="inline-flex size-6 items-center justify-center rounded-md text-faint hover:bg-brand-soft hover:text-brand md:opacity-0 md:focus:opacity-100 md:group-hover:opacity-100" aria-label={`New lesson on ${d}`}><Plus className="size-3.5" aria-hidden /></Link>
               </header>
               <ul className="space-y-1.5">
                 {items.map((l) => {
@@ -296,12 +342,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                               charged={l.students.length > 0 && l.status !== "CANCELLED"}
                               what={`${[l.students.map((s) => s.name).join(", "), l.subject].filter(Boolean).join(" · ")}, ${fmtDay(l.day)}${l.allDay ? ", all day" : ` at ${formatTime(l.startsAt, tz)}`}`}
                               href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
-                        className={`block rounded-md border-l-4 px-2 py-1.5 text-xs leading-snug hover:bg-surface-3 ${cancelled ? "border-line bg-surface-2 text-muted line-through" : "bg-surface-2"}`}
-                        style={cancelled ? undefined : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
+                        className={`block rounded-lg px-2 py-1.5 text-xs leading-snug transition-colors ${chipTone(cancelled, l.allDay)}`}
+                        style={tint(l.tutor?.color)}
                       >
-                        <div className="flex items-baseline justify-between gap-1 font-semibold tabular-nums"><span>{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</span>{!l.allDay && <span className="font-normal text-muted">{l.durationMin} min</span>}</div>
+                        <div className="flex items-baseline justify-between gap-1 tabular-nums"><span className="font-semibold">{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</span>{!l.allDay && <span className="opacity-60">{l.durationMin}m</span>}</div>
                         <div className="font-medium">{l.students.map((s) => s.name).join(", ") || l.subject}</div>
-                        <div className="text-muted">{[l.subject, l.locationType === "REMOTE" ? "remote" : null, l.seriesId ? "weekly" : null, !tutor && l.tutor ? l.tutor.name : null].filter(Boolean).join(" · ")}</div>
+                        <div className="opacity-70">{[l.subject, l.locationType === "REMOTE" ? "remote" : null, !tutor && l.tutor ? l.tutor.name : null].filter(Boolean).join(" · ")}</div>
                       </EventChip>
                     </li>
                   );
@@ -316,12 +362,18 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 }
 
 function ViewSwitch({ view, hrefs }: { view: View; hrefs: Record<View, string> }) {
-  const base = "px-3 py-1.5 text-sm";
   const views: [View, string][] = [["day", "Day"], ["week", "Week"], ["month", "Month"]];
   return (
-    <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label="View">
-      {views.map(([v, label], i) => (
-        <Link key={v} href={hrefs[v]} aria-current={view === v ? "page" : undefined} className={`${base} ${i > 0 ? "border-l border-line" : ""} ${view === v ? "bg-brand-soft font-medium text-brand" : "text-fg hover:bg-surface-3"}`}>{label}</Link>
+    <div className="inline-flex h-9 items-center gap-0.5 rounded-lg bg-surface-3 p-0.5" role="group" aria-label="View">
+      {views.map(([v, label]) => (
+        <Link
+          key={v}
+          href={hrefs[v]}
+          aria-current={view === v ? "page" : undefined}
+          className={`inline-flex h-8 items-center rounded-md px-3 text-sm transition-colors ${view === v ? "bg-surface font-medium text-fg shadow-xs" : "text-muted hover:text-fg"}`}
+        >
+          {label}
+        </Link>
       ))}
     </div>
   );

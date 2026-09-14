@@ -72,7 +72,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                 <div key={sub.id} className="rounded-lg border border-line p-3">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
                     <span className="text-muted tabular-nums">{sub.submittedAt.toISOString().slice(0, 16).replace("T", " ")}</span>
-                    {sub.file ? <a className="font-medium text-brand hover:underline" href={`/api/files/${sub.file.id}`}>{sub.file.name}</a> : <span className="text-muted">no file</span>}
+                    {sub.file ? <a className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline" href={`/api/files/${sub.file.id}`}>{sub.file.name}</a> : <span className="text-muted">no file</span>}
                     {sub.file && <span className="text-muted">{kb(sub.file.sizeBytes)}</span>}
                     <Badge>{sub.source.toLowerCase()}</Badge>
                   </div>

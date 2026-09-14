@@ -28,7 +28,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
             <tbody>
               {rows.map((s) => (
                 <tr key={s.id} className={`hover:bg-surface-2 ${s.archived ? "text-muted" : ""}`}>
-                  <Td><Link href={`/students/${s.id}`} className="font-medium text-brand hover:underline">{s.name}</Link>{s.archived && <Badge>archived</Badge>}</Td>
+                  <Td><Link href={`/students/${s.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{s.name}</Link>{s.archived && <Badge>archived</Badge>}</Td>
                   <Td className="hidden sm:table-cell">{s.grade ?? ""}</Td>
                   <Td className="hidden md:table-cell">{s.lastLessonAt ? formatDay(s.lastLessonAt, org.timezone) : ""}</Td>
                   <Td>{s.nextLessonAt ? formatDay(s.nextLessonAt, org.timezone) : <span className="text-muted">none</span>}</Td>

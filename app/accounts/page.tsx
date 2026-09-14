@@ -1,52 +1,32 @@
 import Link from "next/link";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
-import { formatCents, formatTime } from "@/src/lib/format";
-import { localDateOnly, localDateStr, zonedToUtc } from "@/src/lib/tz";
-import { calendarLessons } from "@/src/services/calendar";
+import { CircleCheck, PiggyBank, TrendingUp } from "lucide-react";
+import { formatCents } from "@/src/lib/format";
+import { localDateOnly } from "@/src/lib/tz";
 import { accountBalances } from "@/src/services/balances";
 import { Balance, Card, Empty, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export const metadata = { title: "Accounts" };
+
+export default async function AccountsPage() {
   const session = await requireSession();
   const org = { id: session.organizationId, name: session.organizationName };
-  const now = new Date();
-  const tz = session.timezone;
-  const todayStr = localDateStr(now, tz);
-  const dayStart = zonedToUtc(todayStr, "00:00", tz);
-  const dayEnd = new Date(dayStart.getTime() + 36 * 3600 * 1000);
-  const [balances, todays] = await Promise.all([
-    accountBalances(prisma, org.id, localDateOnly(now, tz)),
-    calendarLessons(prisma, org.id, dayStart, dayEnd, tz).then((ls) => ls.filter((l) => l.day === todayStr)),
-  ]);
+  const balances = await accountBalances(prisma, org.id, localDateOnly(new Date(), session.timezone));
   const open = balances.filter((b) => b.balanceCents !== 0).sort((a, b) => b.balanceCents - a.balanceCents);
   const owed = open.filter((b) => b.balanceCents > 0).reduce((s, b) => s + b.balanceCents, 0);
   const credit = open.filter((b) => b.balanceCents < 0).reduce((s, b) => s - b.balanceCents, 0);
 
   return (
     <div className="space-y-6">
-      <PageHeader title={org.name} subtitle={<span>{balances.length} accounts. {open.length} with an open balance.</span>} />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Owed to you" value={formatCents(owed)} tone="owed" />
-        <Stat label="Credit held" value={formatCents(credit)} tone="credit" />
-        <Stat label="Accounts at zero" value={balances.length - open.length} tone="muted" />
+      <PageHeader title="Accounts" subtitle={<span>{org.name} · {balances.length} accounts, {open.length} with an open balance</span>} />
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="Owed to you" value={formatCents(owed)} tone="owed" icon={<TrendingUp aria-hidden />} />
+        <Stat label="Credit held" value={formatCents(credit)} tone="credit" icon={<PiggyBank aria-hidden />} />
+        <Stat label="At zero" value={balances.length - open.length} tone="muted" icon={<CircleCheck aria-hidden />} />
       </div>
-      <Card title={`Today, ${new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" }).format(now)}`} actions={<Link href="/calendar" className="text-sm text-brand hover:underline">Calendar</Link>}>
-        {todays.length === 0 ? <Empty>No lessons today.</Empty> : (
-          <ul className="divide-y divide-line" data-testid="today">
-            {todays.map((l) => (
-              <li key={l.id} className={`flex items-center gap-3 py-2 text-sm ${l.status === "CANCELLED" ? "text-muted line-through" : ""}`}>
-                <span className="w-20 shrink-0 tabular-nums">{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</span>
-                <Link href={`/lessons/${l.id}`} className="font-medium text-brand hover:underline">{l.students.map((s) => s.name).join(", ") || l.subject}</Link>
-                <span className="truncate text-muted">{l.subject}</span>
-                <span className="ml-auto shrink-0 text-muted">{l.allDay ? "" : `${l.durationMin} min`}{l.locationType === "REMOTE" ? " · remote" : ""}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
       <Card title="Open balances">
         {open.length === 0 ? <Empty>Every account is at zero.</Empty> : (
           <TableWrap>
@@ -55,7 +35,7 @@ export default async function Home() {
               <tbody>
                 {open.map((b) => (
                   <tr key={b.accountId} className="hover:bg-surface-2">
-                    <Td><Link href={`/accounts/${b.accountId}`} className="font-medium text-brand hover:underline">{b.name}</Link></Td>
+                    <Td><Link href={`/accounts/${b.accountId}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{b.name}</Link></Td>
                     <Td className="hidden text-muted sm:table-cell">{b.studentNames.join(", ")}</Td>
                     <Td right num className="hidden sm:table-cell">{formatCents(b.chargedCents)}</Td>
                     <Td right num className="hidden sm:table-cell">{formatCents(b.paidCents)}</Td>

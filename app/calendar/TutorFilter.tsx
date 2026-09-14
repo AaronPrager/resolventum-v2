@@ -10,7 +10,7 @@ export function TutorFilter({ tutors, value, hrefFor }: { tutors: { id: string; 
       aria-label="Tutor"
       value={value}
       onChange={(e) => router.push(hrefFor[e.target.value])}
-      className="h-9 rounded-md border border-line bg-surface px-2 text-sm text-fg"
+      className="h-9 rounded-lg border border-line bg-surface pl-3 text-sm text-fg shadow-xs hover:border-line-strong"
     >
       <option value="">All tutors</option>
       {tutors.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}

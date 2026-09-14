@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 
 test("home lists accounts with balances", async ({ page }) => {
   await page.goto("/accounts");
-  await expect(page.getByRole("heading", { name: "Easy STEM School" })).toBeVisible();
-  await expect(page.getByText("94 accounts.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
+  await expect(page.getByText(/94 accounts, \d+ with an open balance/)).toBeVisible();
   const lina = page.getByTestId("balances").getByRole("row", { name: /Lina Vernik/ });
   await expect(lina).toContainText("credit $260.00");
 });

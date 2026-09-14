@@ -62,7 +62,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           {owing.length === 0 ? <Empty>Nobody owes anything.</Empty> : (
             <TableWrap><Table>
               <thead><tr><Th>Account</Th><Th right>Balance</Th></tr></thead>
-              <tbody>{owing.map((b) => <tr key={b.accountId} className="hover:bg-surface-2"><Td><Link href={`/accounts/${b.accountId}`} className="text-brand hover:underline">{b.name}</Link></Td><Td right num><Balance cents={b.balanceCents} /></Td></tr>)}</tbody>
+              <tbody>{owing.map((b) => <tr key={b.accountId} className="hover:bg-surface-2"><Td><Link href={`/accounts/${b.accountId}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{b.name}</Link></Td><Td right num><Balance cents={b.balanceCents} /></Td></tr>)}</tbody>
             </Table></TableWrap>
           )}
           <p className="mt-2 text-xs text-muted">Total {formatCents(y.outstandingCents)}. Credit held {formatCents(y.creditHeldCents)}.</p>
@@ -71,7 +71,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           {students.length === 0 ? <Empty>No lessons in {year}.</Empty> : (
             <TableWrap><Table>
               <thead><tr><Th>Student</Th><Th right>Lessons</Th><Th right>Hours</Th><Th right>Charged</Th></tr></thead>
-              <tbody>{students.slice(0, 25).map((r) => <tr key={r.studentId} className="hover:bg-surface-2"><Td><Link href={`/students/${r.studentId}`} className="text-brand hover:underline">{r.name}</Link></Td><Td right num>{r.lessons}</Td><Td right num>{(r.minutes / 60).toFixed(1)}</Td><Td right num>{formatCents(r.chargedCents)}</Td></tr>)}</tbody>
+              <tbody>{students.slice(0, 25).map((r) => <tr key={r.studentId} className="hover:bg-surface-2"><Td><Link href={`/students/${r.studentId}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{r.name}</Link></Td><Td right num>{r.lessons}</Td><Td right num>{(r.minutes / 60).toFixed(1)}</Td><Td right num>{formatCents(r.chargedCents)}</Td></tr>)}</tbody>
             </Table></TableWrap>
           )}
         </Card>

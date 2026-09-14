@@ -8,7 +8,8 @@ import { studentDetail } from "@/src/services/students";
 import { accountBalances } from "@/src/services/balances";
 import { LessonForm } from "@/app/lessons/LessonForm";
 import { cancelLessonAction, createLessonAction, restoreLessonAction } from "@/app/lessons/actions";
-import { Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { Plus } from "lucide-react";
+import { Avatar, Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
 import { archiveStudentAction, unarchiveStudentAction } from "../actions";
 
@@ -34,7 +35,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<span>{student.firstName} {student.lastName}{student.archivedAt && <Badge>archived</Badge>}</span>}
+        title={<span className="inline-flex items-center gap-3"><Avatar name={`${student.firstName} ${student.lastName}`} className="size-10 text-sm" />{student.firstName} {student.lastName}{student.archivedAt && <Badge>archived</Badge>}</span>}
         back={{ href: "/students", label: "Students" }}
         subtitle={[student.grade && `Grade ${student.grade}`, student.schoolName, student.defaultSubject].filter(Boolean).join(" · ")}
         actions={
@@ -62,7 +63,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Account">
           <div className="space-y-1 text-sm">
-            <p><Link href={`/accounts/${student.accountId}`} className="font-medium text-brand hover:underline">{student.account.name}</Link>
+            <p><Link href={`/accounts/${student.accountId}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{student.account.name}</Link>
               {student.account.students.length > 1 && <span className="text-muted"> · {student.account.students.map((s) => s.firstName).join(", ")}</span>}
             </p>
             <p><Balance cents={balance} className="text-base font-semibold" /></p>
@@ -91,7 +92,12 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
         </Card>
       )}
 
-      <Card title="New lesson">
+      <details className="group rounded-xl border border-line bg-surface shadow-xs [&[open]>summary]:border-b [&[open]>summary]:border-line">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[15px] font-semibold sm:px-5 [&::-webkit-details-marker]:hidden">
+          <Plus className="size-4 text-brand transition-transform group-open:rotate-45" aria-hidden />
+          New lesson for {student.firstName}
+        </summary>
+        <div className="p-4 sm:p-5">
         <LessonForm
           action={createLessonAction}
           studentId={student.id}
@@ -105,7 +111,8 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
             tutorId: tutors.length === 1 ? tutors[0].id : "", locationType: "IN_PERSON", meetingLink: "", notes: "", category: "",
           }}
         />
-      </Card>
+        </div>
+      </details>
 
       <LessonTable title={`Upcoming (${upcoming.length})`} rows={showAll ? upcoming : upcoming.slice(0, 8)} hidden={showAll ? 0 : Math.max(0, upcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" />
       <LessonTable title={`Past (${past.length})`} rows={showAll ? past : past.slice(0, 12)} hidden={showAll ? 0 : Math.max(0, past.length - 12)} tz={tz} studentId={student.id} testId="past" />
@@ -144,20 +151,20 @@ function LessonTable({ title, rows, hidden, tz, studentId, testId }: { title: st
       {rows.length === 0 ? <Empty>None.</Empty> : (
         <TableWrap>
           <Table data-testid={testId}>
-            <thead><tr><Th>When</Th><Th>Subject</Th><Th className="hidden sm:table-cell">Tutor</Th><Th right>Price</Th><Th>Status</Th><Th></Th></tr></thead>
+            <thead><tr><Th>When</Th><Th className="hidden sm:table-cell">Subject</Th><Th className="hidden md:table-cell">Tutor</Th><Th right>Price</Th><Th className="hidden sm:table-cell">Status</Th><Th></Th></tr></thead>
             <tbody>
               {rows.map((s) => {
                 const cancelled = s.lesson.status === "CANCELLED";
                 return (
                   <tr key={s.id} className={`hover:bg-surface-2 ${cancelled ? "text-muted line-through" : ""}`}>
-                    <Td num>{formatWhen(s.lesson.startsAt, tz)}<span className="text-muted"> · {s.lesson.durationMin} min</span></Td>
-                    <Td>{s.lesson.subject}{s.lesson.locationType === "REMOTE" && <span className="ml-1 text-xs text-muted">remote</span>}{s.lesson.seriesId && <span className="ml-1 text-xs text-muted">weekly</span>}</Td>
-                    <Td className="hidden sm:table-cell">{s.lesson.tutor?.name ?? ""}</Td>
+                    <Td num><Link href={`/lessons/${s.lesson.id}`} className="underline-offset-2 hover:text-brand hover:underline">{formatWhen(s.lesson.startsAt, tz)}</Link><span className="hidden text-muted sm:inline"> · {s.lesson.durationMin} min</span></Td>
+                    <Td className="hidden sm:table-cell">{s.lesson.subject}{s.lesson.locationType === "REMOTE" && <span className="ml-1 text-xs text-muted">remote</span>}{s.lesson.seriesId && <span className="ml-1 text-xs text-muted">weekly</span>}</Td>
+                    <Td className="hidden md:table-cell">{s.lesson.tutor?.name ?? ""}</Td>
                     <Td right num>{formatCents(s.priceCents)}{s.charge?.voidedAt && <span className="ml-1 text-xs no-underline">not charged</span>}</Td>
-                    <Td><span className="no-underline"><Badge tone={cancelled ? "owed" : s.lesson.status === "COMPLETED" ? "neutral" : "brand"}>{s.lesson.status.toLowerCase()}</Badge></span></Td>
+                    <Td className="hidden sm:table-cell"><span className="no-underline"><Badge tone={cancelled ? "owed" : s.lesson.status === "COMPLETED" ? "neutral" : "brand"}>{s.lesson.status.toLowerCase()}</Badge></span></Td>
                     <Td right>
                       <span className="inline-flex gap-3 no-underline">
-                        <Link href={`/lessons/${s.lesson.id}`} className="text-brand hover:underline">Edit</Link>
+                        <Link href={`/lessons/${s.lesson.id}`} className="hidden text-brand hover:underline sm:inline">Edit</Link>
                         {cancelled ? (
                           <form action={restoreLessonAction} className="inline">
                             <input type="hidden" name="lessonId" value={s.lesson.id} /><input type="hidden" name="studentId" value={studentId} />

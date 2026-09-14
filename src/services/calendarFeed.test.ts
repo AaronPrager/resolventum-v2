@@ -22,7 +22,7 @@ describe("calendar feed", () => {
     expect(feed?.organizationName).toBe("Easy STEM School");
     const ics = feed!.ics;
     expect(ics).toContain("X-WR-CALNAME:Easy STEM School lessons");
-    expect(ics).toContain("SUMMARY:Victoria Li\\, Victoria Li");
+    expect(ics).toContain("SUMMARY:Victoria Li\r\n");
     expect(ics).toContain("DTSTART:20260914T184500Z");
     expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBeGreaterThan(500);
 

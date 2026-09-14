@@ -55,7 +55,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                 {rows.map((r) => (
                   <tr key={r.id} className={`hover:bg-surface-2 ${r.voidedAt ? "text-muted line-through" : ""}`}>
                     <Td num>{formatDate(r.paidOn)}</Td>
-                    <Td><Link href={`/accounts/${r.accountId}`} className="font-medium text-brand hover:underline">{r.accountName}</Link></Td>
+                    <Td><Link href={`/accounts/${r.accountId}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{r.accountName}</Link></Td>
                     <Td className="hidden sm:table-cell">{r.method.toLowerCase().replace("_", " ")}{r.reference && <span className="text-muted"> · {r.reference}</span>}</Td>
                     <Td className="hidden text-muted md:table-cell">{r.kind === "REFUND" ? `Refund: ${r.refundReason ?? ""}` : r.notes ?? ""}{r.voidedAt && <span className="ml-2 no-underline"><Badge tone="owed">voided</Badge></span>}</Td>
                     <Td right num><Money cents={r.amountCents} signed /></Td>

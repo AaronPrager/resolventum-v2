@@ -69,7 +69,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                   <tr key={e.id} className="hover:bg-surface-2">
                     <Td num>{formatDate(e.spentOn)}</Td>
                     <Td>{e.vendor?.name ?? <span className="text-muted">none</span>}</Td>
-                    <Td><Link href={`/expenses/${e.id}`} className="font-medium text-brand hover:underline">{e.description}</Link>{e.recurringExpense && <Badge>recurring</Badge>}{e.receipt && <a className="ml-2 text-xs text-brand hover:underline" href={`/api/files/${e.receipt.id}`}>receipt</a>}</Td>
+                    <Td><Link href={`/expenses/${e.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{e.description}</Link>{e.recurringExpense && <Badge>recurring</Badge>}{e.receipt && <a className="ml-2 text-xs text-brand hover:underline" href={`/api/files/${e.receipt.id}`}>receipt</a>}</Td>
                     <Td className="hidden text-muted sm:table-cell">{e.category.name}</Td>
                     <Td right num>{formatCents(e.amountCents)}</Td>
                     <Td right num className="hidden sm:table-cell">{formatCents(deductibleCents({ amountCents: e.amountCents, taxTreatment: e.taxTreatment as TaxTreatment, businessPercent: e.businessPercent }, bps))}</Td>
