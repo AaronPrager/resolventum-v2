@@ -6,8 +6,7 @@ import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Logo } from "./Logo";
 import { SideNav } from "./Nav";
 import { Avatar } from "@/src/components/ui";
-
-export const SIDEBAR_COOKIE = "sidebar";
+import { SIDEBAR_COOKIE } from "@/src/auth/constants";
 
 /**
  * The left menu on a desktop. It folds to an icon rail and back; the choice
