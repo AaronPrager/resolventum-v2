@@ -5,6 +5,7 @@ import { formatCents, formatTime } from "@/src/lib/format";
 import { localDateStr, zonedToUtc } from "@/src/lib/tz";
 import { calendarLessons, type CalendarLesson } from "@/src/services/calendar";
 import { LinkButton, PageHeader } from "@/src/components/ui";
+import { DayCell } from "./DayCell";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const org = { id: session.organizationId, name: session.organizationName, timezone: session.timezone };
   const tz = org.timezone;
   const today = localDateStr(new Date(), tz);
-  const view = q.view === "month" || (q.month && !q.week) ? "month" : "week";
+  // Month is the default; a week is shown only when asked for.
+  const view = q.view === "week" || q.week ? "week" : "month";
 
   if (view === "month") {
     const month = q.month && /^\d{4}-\d{2}$/.test(q.month) ? q.month : today.slice(0, 7);
@@ -72,7 +74,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <>
               <ViewSwitch view="month" week={mondayOf(today)} month={month} />
               <LinkButton href={`/calendar?month=${addMonths(month, -1)}`} variant="secondary" aria-label="Previous month">Previous</LinkButton>
-              <LinkButton href="/calendar?view=month" variant="secondary">Today</LinkButton>
+              <LinkButton href="/calendar" variant="secondary">Today</LinkButton>
               <LinkButton href={`/calendar?month=${addMonths(month, 1)}`} variant="secondary" aria-label="Next month">Next</LinkButton>
               <LinkButton href={`/lessons/new?date=${today}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary">New lesson</LinkButton>
             </>
@@ -90,7 +92,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 const isToday = d === today;
                 const outside = d < first || d >= nextMonth;
                 return (
-                  <section key={d} className={`min-h-28 p-1.5 ${outside ? "bg-surface-2" : "bg-surface"}`} data-day={d}>
+                  <DayCell key={d} day={d} newHref={`/lessons/new?date=${d}&returnTo=${encodeURIComponent(returnTo)}`} className={`min-h-28 p-1.5 ${outside ? "bg-surface-2" : "bg-surface"}`}>
                     <header className="mb-1 flex items-center justify-between">
                       <Link
                         href={`/calendar?week=${mondayOf(d)}`}
@@ -120,7 +122,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         );
                       })}
                     </ul>
-                  </section>
+                  </DayCell>
                 );
               })}
             </div>
@@ -148,7 +150,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <>
             <ViewSwitch view="week" week={monday} month={monday.slice(0, 7)} />
             <LinkButton href={`/calendar?week=${addDays(monday, -7)}`} variant="secondary" aria-label="Previous week">Previous</LinkButton>
-            <LinkButton href="/calendar" variant="secondary">Today</LinkButton>
+            <LinkButton href={`/calendar?week=${today}`} variant="secondary">Today</LinkButton>
             <LinkButton href={`/calendar?week=${addDays(monday, 7)}`} variant="secondary" aria-label="Next week">Next</LinkButton>
             <LinkButton href={`/lessons/new?date=${today}&returnTo=${encodeURIComponent(returnTo)}`} variant="primary">New lesson</LinkButton>
           </>

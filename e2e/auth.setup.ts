@@ -26,6 +26,6 @@ setup("sign in as the test user", async ({ page }) => {
   await page.getByLabel("Email").fill(E2E_EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: /^Week of / })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/ })).toBeVisible();
   await page.context().storageState({ path: "e2e/.auth/user.json" });
 });
