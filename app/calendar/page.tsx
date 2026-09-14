@@ -6,6 +6,7 @@ import { localDateStr, zonedToUtc } from "@/src/lib/tz";
 import { calendarLessons, type CalendarLesson } from "@/src/services/calendar";
 import { Empty, LinkButton, PageHeader } from "@/src/components/ui";
 import { DayCell } from "./DayCell";
+import { EventChip } from "./EventChip";
 import { TutorFilter } from "./TutorFilter";
 
 export const dynamic = "force-dynamic";
@@ -125,8 +126,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     const cancelled = l.status === "CANCELLED";
                     return (
                       <li key={l.id}>
-                        <Link
-                          href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
+                        <EventChip
+                              lessonId={l.id}
+                              day={l.day}
+                              inSeries={!!l.seriesId}
+                              charged={l.students.length > 0 && l.status !== "CANCELLED"}
+                              what={`${[l.students.map((s) => s.name).join(", "), l.subject].filter(Boolean).join(" · ")}, ${fmtDay(l.day)}${l.allDay ? ", all day" : ` at ${formatTime(l.startsAt, tz)}`}`}
+                              href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
                           className={`flex items-start gap-4 border-l-4 px-4 py-3 hover:bg-surface-2 ${cancelled ? "text-muted line-through" : ""}`}
                           style={cancelled ? { borderLeftColor: "var(--line)" } : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
                         >
@@ -141,7 +147,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             </div>
                           </div>
                           <div className="shrink-0 text-sm tabular-nums text-muted">{formatCents(l.students.reduce((s, st) => s + st.priceCents, 0))}</div>
-                        </Link>
+                        </EventChip>
                       </li>
                     );
                   })}
@@ -214,14 +220,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         const full = l.students.map((s) => s.name).join(", ") || l.subject || "Event";
                         return (
                           <li key={l.id}>
-                            <Link
+                            <EventChip
+                              lessonId={l.id}
+                              day={l.day}
+                              inSeries={!!l.seriesId}
+                              charged={l.students.length > 0 && l.status !== "CANCELLED"}
+                              what={`${[l.students.map((s) => s.name).join(", "), l.subject].filter(Boolean).join(" · ")}, ${fmtDay(l.day)}${l.allDay ? ", all day" : ` at ${formatTime(l.startsAt, tz)}`}`}
                               href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
                               title={`${l.allDay ? "All day" : formatTime(l.startsAt, tz)} ${full}${l.subject ? ` · ${l.subject}` : ""}${l.tutor ? ` · ${l.tutor.name}` : ""}${cancelled ? " (cancelled)" : ""}`}
                               className={`block truncate rounded border-l-2 px-1 py-0.5 text-[11px] leading-tight hover:bg-surface-3 ${cancelled ? "border-line text-muted line-through" : "bg-surface-2"}`}
                               style={cancelled ? undefined : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
                             >
                               <span className="tabular-nums text-muted">{l.allDay ? "" : shortTime(l.startsAt, tz)}</span> {names}
-                            </Link>
+                            </EventChip>
                           </li>
                         );
                       })}
@@ -278,15 +289,20 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   const cancelled = l.status === "CANCELLED";
                   return (
                     <li key={l.id}>
-                      <Link
-                        href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
+                      <EventChip
+                              lessonId={l.id}
+                              day={l.day}
+                              inSeries={!!l.seriesId}
+                              charged={l.students.length > 0 && l.status !== "CANCELLED"}
+                              what={`${[l.students.map((s) => s.name).join(", "), l.subject].filter(Boolean).join(" · ")}, ${fmtDay(l.day)}${l.allDay ? ", all day" : ` at ${formatTime(l.startsAt, tz)}`}`}
+                              href={`/lessons/${l.id}?returnTo=${encodeURIComponent(returnTo)}`}
                         className={`block rounded-md border-l-4 px-2 py-1.5 text-xs leading-snug hover:bg-surface-3 ${cancelled ? "border-line bg-surface-2 text-muted line-through" : "bg-surface-2"}`}
                         style={cancelled ? undefined : { borderLeftColor: l.tutor?.color ?? "var(--brand)" }}
                       >
                         <div className="flex items-baseline justify-between gap-1 font-semibold tabular-nums"><span>{l.allDay ? "All day" : formatTime(l.startsAt, tz)}</span>{!l.allDay && <span className="font-normal text-muted">{l.durationMin} min</span>}</div>
                         <div className="font-medium">{l.students.map((s) => s.name).join(", ") || l.subject}</div>
                         <div className="text-muted">{[l.subject, l.locationType === "REMOTE" ? "remote" : null, l.seriesId ? "weekly" : null, !tutor && l.tutor ? l.tutor.name : null].filter(Boolean).join(" · ")}</div>
-                      </Link>
+                      </EventChip>
                     </li>
                   );
                 })}

@@ -10,7 +10,7 @@ import type { PrismaClient } from "../../generated/prisma/client";
 import { dateOnlyFromStr, localDateOnly, localDateStr, localTimeStr, zonedToUtc } from "../lib/tz";
 import { formatRule, parseRule, weeklyOccurrences, weeklyOccurrencesAfter } from "../lib/recurrence";
 import { rebuildAccountAllocations } from "./allocation";
-import { LessonError, type LessonInput, type LessonUpdate, cancelLesson, resolveOwner, updateLesson } from "./lessons";
+import { LessonError, type LessonInput, type LessonUpdate, cancelLesson, deleteLesson, resolveOwner, updateLesson } from "./lessons";
 
 export const HORIZON_DAYS = 180;
 
@@ -106,6 +106,11 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
     where: { organizationId, endsOn: null },
     include: { lessons: { where: { deletedAt: null }, orderBy: { startsAt: "desc" }, take: 1, include: { students: true } } },
   });
+  // Latest date each series ever reached, deleted lessons included, so a deleted one is not made again.
+  const reached = new Map(
+    (await db.lesson.groupBy({ by: ["seriesId"], where: { seriesId: { in: series.map((s) => s.id) } }, _max: { startsAt: true } }))
+      .map((r) => [r.seriesId as string, r._max.startsAt as Date]),
+  );
   let created = 0;
   const touchedAccounts = new Set<string>();
   for (const s of series) {
@@ -115,7 +120,7 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
     const student = seat ? await db.student.findUnique({ where: { id: seat.studentId }, select: { id: true, accountId: true, deletedAt: true, archivedAt: true } }) : null;
     if (seat && (!student || student.deletedAt || student.archivedAt)) continue;
     const { intervalWeeks } = parseRule(s.rrule);
-    const dates = weeklyOccurrencesAfter({ firstStartsAt: s.startsAt, timeZone: org.timezone, intervalWeeks, after: last.startsAt, until });
+    const dates = weeklyOccurrencesAfter({ firstStartsAt: s.startsAt, timeZone: org.timezone, intervalWeeks, after: reached.get(s.id) ?? last.startsAt, until });
     if (dates.length === 0) continue;
     await db.$transaction(async (tx) => {
       for (const startsAt of dates) {
@@ -183,5 +188,20 @@ export async function cancelLessonAndFuture(db: PrismaClient, lessonId: string, 
     const dayBefore = new Date(localDateOnly(first.startsAt, timeZone).getTime() - 86400000);
     await db.lessonSeries.update({ where: { id: first.seriesId }, data: { endsOn: dayBefore } });
   }
+  return lessons.length;
+}
+
+/** Delete this lesson and every later one in its series, cancelled ones too, and close the series the day before. */
+export async function deleteLessonAndFuture(db: PrismaClient, lessonId: string, timeZone: string) {
+  const lesson = await db.lesson.findUnique({ where: { id: lessonId }, select: { id: true, seriesId: true, startsAt: true, deletedAt: true } });
+  if (!lesson || lesson.deletedAt) throw new LessonError("Lesson not found");
+  if (!lesson.seriesId) {
+    await deleteLesson(db, lessonId);
+    return 1;
+  }
+  const lessons = await db.lesson.findMany({ where: { seriesId: lesson.seriesId, startsAt: { gte: lesson.startsAt }, deletedAt: null }, select: { id: true }, orderBy: { startsAt: "asc" } });
+  for (const l of lessons) await deleteLesson(db, l.id);
+  const dayBefore = new Date(localDateOnly(lesson.startsAt, timeZone).getTime() - 86400000);
+  await db.lessonSeries.update({ where: { id: lesson.seriesId }, data: { endsOn: dayBefore } });
   return lessons.length;
 }

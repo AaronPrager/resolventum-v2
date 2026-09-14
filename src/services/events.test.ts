@@ -1,8 +1,8 @@
 /** Lessons with no student (events) and all-day entries. Runs against the local database; cleans up. */
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "../db";
-import { cancelLesson, createLesson, LessonError, updateLesson } from "./lessons";
-import { createSeries, extendOpenSeries } from "./series";
+import { cancelLesson, createLesson, deleteLesson, LessonError, updateLesson } from "./lessons";
+import { createSeries, deleteLessonAndFuture, extendOpenSeries } from "./series";
 import { calendarLessons } from "./calendar";
 import { buildIcs } from "../lib/ics";
 
@@ -58,5 +58,37 @@ describe("cancelling without a reason", () => {
     const l = await createLesson(prisma, { organizationId: org.id, startsAt: new Date("2031-05-05T18:00:00Z"), durationMin: 60, subject: `${TITLE} no reason`, priceCents: 0 });
     await cancelLesson(prisma, l.id);
     expect((await prisma.lesson.findUniqueOrThrow({ where: { id: l.id } })).status).toBe("CANCELLED");
+  });
+});
+
+describe("deleting", () => {
+  it("voids the charge, hides the lesson, and the nightly extension does not bring it back", async () => {
+    const org = await prisma.organization.findFirstOrThrow();
+    const student = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id, firstName: "Estella", archivedAt: null } });
+    // Open-ended weekly series starting now, so the horizon logic applies.
+    const start = new Date(Date.now() + 2 * 86400000);
+    start.setUTCHours(21, 0, 0, 0);
+    const r = await createSeries(prisma, { studentId: student.id, startsAt: start, durationMin: 60, subject: `${TITLE} delete`, priceCents: 13000 });
+    const ids = r.lessonIds;
+    const last = ids[ids.length - 1];
+
+    await deleteLesson(prisma, last);
+    const charge = await prisma.charge.findFirstOrThrow({ where: { lessonStudent: { lessonId: last } } });
+    expect(charge.voidedAt).not.toBeNull();
+    expect(charge.voidReason).toBe("Lesson deleted");
+    expect(await extendOpenSeries(prisma, org.id)).toBe(0);
+    expect(await prisma.lesson.count({ where: { seriesId: r.series.id, deletedAt: null } })).toBe(ids.length - 1);
+
+    const n = await deleteLessonAndFuture(prisma, ids[1], org.timezone);
+    expect(n).toBe(ids.length - 2);
+    expect(await prisma.lesson.count({ where: { seriesId: r.series.id, deletedAt: null } })).toBe(1);
+    expect((await prisma.lessonSeries.findUniqueOrThrow({ where: { id: r.series.id } })).endsOn).not.toBeNull();
+    await expect(deleteLesson(prisma, last)).rejects.toThrow(/not found/);
+
+    // Clean up the charges and seats this test made.
+    await prisma.charge.deleteMany({ where: { lessonStudent: { lessonId: { in: ids } } } });
+    await prisma.lessonStudent.deleteMany({ where: { lessonId: { in: ids } } });
+    const { rebuildAccountAllocations } = await import("./allocation");
+    await rebuildAccountAllocations(prisma, student.accountId);
   });
 });

@@ -17,7 +17,7 @@ const buttonBase = "inline-flex items-center justify-center gap-1.5 rounded-md t
 const buttonVariants = {
   primary: "bg-brand text-brand-fg hover:bg-brand-strong px-3.5 py-2",
   secondary: "bg-surface text-fg border border-line hover:bg-surface-3 px-3.5 py-2",
-  danger: "bg-surface text-owed border border-owed/40 hover:bg-owed-soft px-3.5 py-2",
+  danger: "bg-owed text-white border border-owed hover:opacity-90 px-3.5 py-2",
   ghost: "text-brand hover:bg-brand-soft px-2 py-1",
   link: "text-brand hover:underline px-0 py-0 font-normal",
 };

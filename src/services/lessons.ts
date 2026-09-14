@@ -225,3 +225,28 @@ export async function restoreLesson(db: Db, lessonId: string) {
     await rebuildAccountAllocations(db, accountId);
   }
 }
+
+/**
+ * Delete a lesson or event. It is kept in the database with deletedAt set, so
+ * nothing is lost, but it leaves the calendar, the student page, and the feed.
+ * Its charges are voided so the balance drops, same as a cancellation.
+ */
+export async function deleteLesson(db: Db, lessonId: string) {
+  const lesson = await db.lesson.findUnique({
+    where: { id: lessonId },
+    include: { students: { include: { charge: true, student: { select: { accountId: true } } } } },
+  });
+  if (!lesson || lesson.deletedAt) throw new LessonError("Lesson not found");
+  const now = new Date();
+  await db.$transaction(async (tx) => {
+    await tx.lesson.update({ where: { id: lessonId }, data: { deletedAt: now } });
+    for (const seat of lesson.students) {
+      if (seat.charge && !seat.charge.voidedAt) {
+        await tx.charge.update({ where: { id: seat.charge.id }, data: { voidedAt: now, voidReason: "Lesson deleted" } });
+      }
+    }
+  });
+  for (const accountId of new Set(lesson.students.map((s) => s.student.accountId))) {
+    await rebuildAccountAllocations(db, accountId);
+  }
+}

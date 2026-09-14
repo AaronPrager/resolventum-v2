@@ -59,6 +59,7 @@ export async function studentDetail(prisma: PrismaClient, studentId: string) {
       progressNotes: { orderBy: { notedOn: "desc" }, take: 20 },
       assignments: { orderBy: { createdAt: "desc" }, take: 10, include: { _count: { select: { submissions: true } } } },
       lessons: {
+        where: { lesson: { deletedAt: null } },
         include: { lesson: { include: { tutor: { select: { id: true, name: true, color: true } } } }, charge: { select: { amountCents: true, voidedAt: true } } },
         orderBy: { lesson: { startsAt: "desc" } },
       },

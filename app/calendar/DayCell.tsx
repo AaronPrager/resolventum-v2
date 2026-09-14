@@ -11,7 +11,7 @@ export function DayCell({ day, newHref, className, children }: { day: string; ne
       className={className}
       data-day={day}
       onDoubleClick={(e) => {
-        if ((e.target as HTMLElement).closest("a")) return; // a lesson or the day number: let its own link act
+        if ((e.target as HTMLElement).closest("a,[data-lesson]")) return; // a lesson or the day number handles its own double-click
         router.push(newHref);
       }}
       title="Double-click to add a lesson"

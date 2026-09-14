@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
 import { RoleError, requireSession, requireWriter } from "@/src/auth/current";
 import { zonedToUtc } from "@/src/lib/tz";
-import { LessonError, cancelLesson, createLesson, restoreLesson, updateLesson } from "@/src/services/lessons";
-import { cancelLessonAndFuture, createSeries, updateLessonAndFuture } from "@/src/services/series";
+import { LessonError, cancelLesson, createLesson, deleteLesson, restoreLesson, updateLesson } from "@/src/services/lessons";
+import { cancelLessonAndFuture, createSeries, deleteLessonAndFuture, updateLessonAndFuture } from "@/src/services/series";
 
 export interface ActionState {
   error?: string;
@@ -127,4 +127,20 @@ export async function restoreLessonAction(fd: FormData): Promise<void> {
   await restoreLesson(prisma, lessonId);
   if (studentId) revalidatePath(`/students/${studentId}`);
   revalidatePath("/calendar");
+}
+
+/** Called from the calendar after the user confirms. Returns an error message instead of throwing. */
+export async function deleteLessonAction(lessonId: string, scope: "one" | "future"): Promise<ActionState> {
+  try {
+    const tz = await lessonTimezone(lessonId);
+    if (scope === "future") await deleteLessonAndFuture(prisma, lessonId, tz);
+    else await deleteLesson(prisma, lessonId);
+  } catch (e) {
+    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath("/calendar");
+  revalidatePath("/students");
+  revalidatePath("/accounts");
+  return {};
 }
