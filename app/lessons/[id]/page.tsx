@@ -36,7 +36,8 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
   const group = lesson.students.length > 1;
   const choices = await studentChoices(prisma, lesson.organizationId, lesson.students.map((s) => s.studentId));
   const tz = lesson.organization.timezone;
-  const tutors = await prisma.tutor.findMany({ where: { organizationId: lesson.organizationId, archivedAt: null }, orderBy: { name: "asc" } });
+  const tutors = (await prisma.tutor.findMany({ where: { organizationId: lesson.organizationId, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, hourlyClientRateCents: true, subjects: true, availability: true } }))
+    .map((t) => ({ id: t.id, name: t.name, clientRateCents: t.hourlyClientRateCents, subjects: t.subjects, availability: t.availability }));
   const back = returnTo ?? (seat ? `/students/${seat.studentId}` : "/calendar");
   const canWrite = session.role !== "ACCOUNTANT";
   const cancelled = lesson.status === "CANCELLED" || lesson.status === "NO_SHOW";

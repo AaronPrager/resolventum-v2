@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Button, Checkbox, Field, FormError, Input, Radio, Select, Textarea } from "@/src/components/ui";
+import { describeAvailability, parseAvailability, suggestedPriceCents, weekdayOf, withinAvailability } from "@/src/lib/availability";
 import type { ActionState } from "./actions";
 
 export interface LessonFormValues {
@@ -28,12 +29,23 @@ export interface StudentChoice {
   defaultSubject?: string;
 }
 
+export interface TutorChoice {
+  id: string;
+  name: string;
+  /** What families pay per hour with this tutor; fills an empty price. */
+  clientRateCents?: number | null;
+  /** Offered in the subject box. */
+  subjects?: string[];
+  /** "Mon-Thu 16:00-20:00"; the form warns when the lesson falls outside. */
+  availability?: string | null;
+}
+
 export function LessonForm({ action, students, lessonId, inSeries, tutors, initial, submitLabel, allowRepeat, returnTo }: {
   action: (prev: ActionState, fd: FormData) => Promise<ActionState>;
   students: StudentChoice[];
   lessonId?: string;
   inSeries?: boolean;
-  tutors: { id: string; name: string }[];
+  tutors: TutorChoice[];
   initial: LessonFormValues;
   submitLabel: string;
   allowRepeat?: boolean;
@@ -43,9 +55,21 @@ export function LessonForm({ action, students, lessonId, inSeries, tutors, initi
   const [allDay, setAllDay] = useState(!!initial.allDay);
   const [seats, setSeats] = useState(initial.seats);
   const [subject, setSubject] = useState(initial.subject);
+  const [tutorId, setTutorId] = useState(initial.tutorId);
+  const [date, setDate] = useState(initial.date);
+  const [time, setTime] = useState(initial.time);
+  const [duration, setDuration] = useState(String(initial.durationMin));
   const byId = new Map(students.map((s) => [s.id, s]));
+  const tutor = tutors.find((t) => t.id === tutorId) ?? null;
   const isEvent = seats.length === 0;
   const taken = new Set(seats.map((s) => s.studentId).filter(Boolean));
+  const durationMin = Number(duration);
+
+  /** The tutor's client rate for this length, as "90.00", when there is one. */
+  function tutorPrice(t: TutorChoice | null): string {
+    const c = suggestedPriceCents(t?.clientRateCents, durationMin);
+    return c == null ? "" : (c / 100).toFixed(2);
+  }
 
   function pick(i: number, studentId: string) {
     if (studentId === "none") {
@@ -53,9 +77,30 @@ export function LessonForm({ action, students, lessonId, inSeries, tutors, initi
       return;
     }
     const st = byId.get(studentId);
-    setSeats((rows) => rows.map((r, j) => (j === i ? { studentId, price: r.price || st?.defaultPrice || "" } : r)));
+    setSeats((rows) => rows.map((r, j) => (j === i ? { studentId, price: r.price || st?.defaultPrice || tutorPrice(tutor) } : r)));
     if (!subject && st?.defaultSubject && seats.length <= 1) setSubject(st.defaultSubject);
   }
+
+  function pickTutor(id: string) {
+    setTutorId(id);
+    const t = tutors.find((x) => x.id === id) ?? null;
+    // Only empty prices are filled; a price already typed or from the student's usual price stays.
+    const fill = tutorPrice(t);
+    if (fill) setSeats((rows) => rows.map((r) => (r.price ? r : { ...r, price: fill })));
+  }
+
+  // The availability warning: a sentence, never a block.
+  let outsideHours: string | null = null;
+  if (tutor?.availability && !allDay && /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) && durationMin > 0) {
+    try {
+      const windows = parseAvailability(tutor.availability);
+      const [h, m] = time.split(":").map(Number);
+      if (windows && !withinAvailability(windows, weekdayOf(date), h * 60 + m, durationMin)) outsideHours = `Outside ${tutor.name}'s hours (${describeAvailability(windows)}).`;
+    } catch {
+      outsideHours = null; // unreadable hours on the profile: nothing to check
+    }
+  }
+  const subjectOptions = [...new Set([...(tutor?.subjects ?? []), ...tutors.flatMap((t) => t.subjects ?? [])])];
 
   return (
     <form action={formAction} className="space-y-5" data-testid="lesson-form">
@@ -107,17 +152,23 @@ export function LessonForm({ action, students, lessonId, inSeries, tutors, initi
       </fieldset>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label="Date"><Input type="date" name="date" defaultValue={initial.date} required /></Field>
-        <Field label="Time"><Input type="time" name="time" defaultValue={initial.time} required={!allDay} disabled={allDay} /></Field>
-        <Field label="Minutes"><Input type="number" name="durationMin" min={1} max={1440} defaultValue={initial.durationMin} required={!allDay} disabled={allDay} /></Field>
+        <Field label="Date"><Input type="date" name="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
+        <Field label="Time"><Input type="time" name="time" value={time} onChange={(e) => setTime(e.target.value)} required={!allDay} disabled={allDay} /></Field>
+        <Field label="Minutes"><Input type="number" name="durationMin" min={1} max={1440} value={duration} onChange={(e) => setDuration(e.target.value)} required={!allDay} disabled={allDay} /></Field>
         <div className="flex items-end pb-2"><Checkbox name="allDay" label="All day" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} /></div>
-        <Field label={isEvent ? "Title" : "Subject"} className="col-span-2"><Input type="text" name="subject" value={subject} onChange={(e) => setSubject(e.target.value)} required /></Field>
-        <Field label="Tutor"><Select name="tutorId" defaultValue={initial.tutorId}><option value="">None</option>{tutors.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
+        <Field label={isEvent ? "Title" : "Subject"} className="col-span-2">
+          <Input type="text" name="subject" value={subject} onChange={(e) => setSubject(e.target.value)} list={subjectOptions.length ? "subject-options" : undefined} required />
+          {subjectOptions.length > 0 && <datalist id="subject-options">{subjectOptions.map((s) => <option key={s} value={s} />)}</datalist>}
+        </Field>
+        <Field label="Tutor" hint={tutor?.clientRateCents != null ? `${(tutor.clientRateCents / 100).toFixed(2)} per hour with ${tutor.name.split(" ")[0]}` : undefined}>
+          <Select name="tutorId" value={tutorId} onChange={(e) => pickTutor(e.target.value)}><option value="">None</option>{tutors.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+        </Field>
         <Field label="Where"><Select name="locationType" defaultValue={initial.locationType}><option value="IN_PERSON">In person</option><option value="REMOTE">Remote</option></Select></Field>
         <Field label="Category"><Select name="category" defaultValue={initial.category}><option value="">None</option><option value="TUTORING">Tutoring</option><option value="COLLEGE_COUNSELING">College counseling</option></Select></Field>
         <Field label="Meeting link" className="col-span-2 sm:col-span-3"><Input type="url" name="meetingLink" defaultValue={initial.meetingLink} /></Field>
         <Field label="Notes" className="col-span-full"><Textarea name="notes" rows={2} defaultValue={initial.notes} /></Field>
       </div>
+      {outsideHours && <p role="status" className="rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-warn" data-testid="outside-hours">{outsideHours} You can still save it.</p>}
       {allowRepeat && (
         <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
           <Checkbox name="repeat" label="Repeat every" />

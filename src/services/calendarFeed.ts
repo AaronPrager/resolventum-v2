@@ -35,20 +35,23 @@ export async function feedStatus(db: PrismaClient, membershipId: string): Promis
 export async function feedForToken(db: PrismaClient, raw: string, now = new Date()): Promise<{ ics: string; organizationName: string } | null> {
   const t = await db.token.findUnique({ where: { tokenHash: hashToken(raw) } });
   if (!t || t.kind !== "CALENDAR_FEED" || t.revokedAt || (t.expiresAt && t.expiresAt < now)) return null;
-  const m = await db.membership.findUnique({ where: { id: t.subjectId }, include: { organization: true } });
+  const m = await db.membership.findUnique({ where: { id: t.subjectId }, include: { organization: true, tutor: { select: { timezone: true } } } });
   if (!m) return null;
   const org = m.organization;
+  // A tutor's feed is their own lessons, described in their own zone when they set one.
+  const mine = m.role === "TUTOR" && m.tutorId ? m.tutorId : null;
+  const tz = (mine && m.tutor?.timezone) || org.timezone;
   const from = new Date(now.getTime() - 90 * 86400000);
   const to = new Date(now.getTime() + 400 * 86400000);
   const lessons = await db.lesson.findMany({
-    where: { organizationId: org.id, deletedAt: null, startsAt: { gte: from, lte: to } },
+    where: { organizationId: org.id, deletedAt: null, startsAt: { gte: from, lte: to }, ...(mine ? { tutorId: mine } : {}) },
     include: { tutor: { select: { name: true } }, students: { include: { student: { select: { firstName: true, lastName: true } } } } },
     orderBy: { startsAt: "asc" },
   });
   const events: IcsEvent[] = lessons.map((l) => {
     const names = l.students.map((s) => `${s.student.firstName} ${s.student.lastName}`).join(", ") || "No student";
     const desc = [
-      l.allDay ? "All day" : `${l.durationMin} min at ${formatTime(l.startsAt, org.timezone)}`,
+      l.allDay ? "All day" : `${l.durationMin} min at ${formatTime(l.startsAt, tz)}`,
       l.tutor ? `Tutor: ${l.tutor.name}` : null,
       l.seriesId ? "Weekly series" : null,
       l.notes ?? null,

@@ -23,7 +23,8 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const showAll = (await searchParams).all === "1";
   const detail = await studentDetail(prisma, id);
   if (!detail || detail.student.organizationId !== session.organizationId) notFound();
-  const { student, tutors } = detail;
+  const { student } = detail;
+  const tutors = detail.tutors.map((t) => ({ id: t.id, name: t.name, clientRateCents: t.hourlyClientRateCents, subjects: t.subjects, availability: t.availability }));
   const scope = tutorScope(session);
   if (scope && !student.lessons.some((l) => l.lesson.tutorId === scope)) notFound();
   const notes = await sessionNotesForStudent(prisma, student.id, 12);

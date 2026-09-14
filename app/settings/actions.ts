@@ -10,6 +10,7 @@ import { FileError } from "@/src/services/files";
 import { disableIntake, enableIntake } from "@/src/services/intake";
 import { HolidayError, addHoliday, removeHoliday } from "@/src/services/holidays";
 import { auditAs } from "@/src/services/audit";
+import { AvailabilityError, parseAvailability } from "@/src/lib/availability";
 
 export interface FeedState { url?: string; error?: string }
 export interface ActionState { error?: string; ok?: string }
@@ -76,6 +77,7 @@ export async function saveTutorAction(_p: ActionState, fd: FormData): Promise<Ac
     const color = str(fd, "color");
     const timezone = str(fd, "timezone");
     if (timezone && !ZONES.has(timezone)) return { error: "Pick a valid timezone" };
+    try { parseAvailability(str(fd, "availability")); } catch (e) { if (e instanceof AvailabilityError) return { error: `Availability: ${e.message}` }; throw e; }
     data = {
       name, email: str(fd, "email") || null, phone: str(fd, "phone") || null, color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : null,
       subjects: str(fd, "subjects").split(",").map((x) => x.trim()).filter(Boolean),

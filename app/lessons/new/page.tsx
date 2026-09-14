@@ -13,7 +13,7 @@ export default async function NewLessonPage({ searchParams }: { searchParams: Pr
   const org = { id: session.organizationId, name: session.organizationName, timezone: session.timezone };
   const [students, tutors] = await Promise.all([
     studentChoices(prisma, org.id),
-    prisma.tutor.findMany({ where: { organizationId: org.id, archivedAt: null }, orderBy: { name: "asc" } }),
+    prisma.tutor.findMany({ where: { organizationId: org.id, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, hourlyClientRateCents: true, subjects: true, availability: true } }),
   ]);
   const date = q.date && /^\d{4}-\d{2}-\d{2}$/.test(q.date) ? q.date : new Date().toISOString().slice(0, 10);
   const time = q.time && /^\d{2}:\d{2}$/.test(q.time) ? q.time : "16:00";
@@ -24,7 +24,7 @@ export default async function NewLessonPage({ searchParams }: { searchParams: Pr
         <LessonForm
           action={createLessonAction}
           students={students}
-          tutors={tutors}
+          tutors={tutors.map((t) => ({ id: t.id, name: t.name, clientRateCents: t.hourlyClientRateCents, subjects: t.subjects, availability: t.availability }))}
           submitLabel="Add lesson"
           allowRepeat
           returnTo={q.returnTo ?? "/calendar"}

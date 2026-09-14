@@ -24,7 +24,10 @@ export interface SessionUser {
   name: string;
   organizationId: string;
   organizationName: string;
+  /** The zone times are shown and typed in: the tutor's own when they set one, else the school's. */
   timezone: string;
+  /** The school's zone, for charges and anything shared with families. */
+  organizationTimezone: string;
   role: string;
   /** The Tutor row this login represents, when the role is TUTOR and the owner linked them. */
   tutorId: string | null;
@@ -55,7 +58,7 @@ export async function sessionFromToken(db: PrismaClient, token: string | undefin
   if (!token) return null;
   const s = await db.authSession.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { include: { memberships: { include: { organization: true }, orderBy: { createdAt: "asc" }, take: 1 } } } },
+    include: { user: { include: { memberships: { include: { organization: true, tutor: { select: { timezone: true } } }, orderBy: { createdAt: "asc" }, take: 1 } } } },
   });
   if (!s || s.revokedAt || s.expiresAt < new Date() || s.user.deletedAt) return null;
   const m = s.user.memberships[0];
@@ -69,7 +72,8 @@ export async function sessionFromToken(db: PrismaClient, token: string | undefin
     name: s.user.name,
     organizationId: m.organizationId,
     organizationName: m.organization.name,
-    timezone: m.organization.timezone,
+    timezone: (m.role === "TUTOR" && m.tutor?.timezone) || m.organization.timezone,
+    organizationTimezone: m.organization.timezone,
     role: m.role,
     tutorId: m.tutorId,
   };

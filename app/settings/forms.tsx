@@ -42,7 +42,7 @@ export function TutorForm({ tutor, zones }: { tutor?: TutorValues; zones: string
         <Field label="Calendar color"><Input type="color" name="color" defaultValue={tutor?.color || "#4f46e5"} className="h-9 p-1" /></Field>
         <Field label="Timezone" hint="If not the school's"><Select name="timezone" defaultValue={tutor?.timezone ?? ""}><option value="">School&apos;s</option>{zones.map((z) => <option key={z} value={z}>{z}</option>)}</Select></Field>
         <Field label="Subjects" className="col-span-2 sm:col-span-3" hint="Comma separated"><Input name="subjects" defaultValue={tutor?.subjects ?? ""} placeholder="Algebra, SAT Math, Chemistry" /></Field>
-        <Field label="Availability" className="col-span-2 sm:col-span-3"><Input name="availability" defaultValue={tutor?.availability ?? ""} placeholder="Mon to Thu after 4pm, Sat mornings" /></Field>
+        <Field label="Availability" className="col-span-2 sm:col-span-3" hint="Days and hours, like Mon-Thu 16:00-20:00, Sat 9:00-13:00. The lesson form warns when a time falls outside."><Input name="availability" defaultValue={tutor?.availability ?? ""} placeholder="Mon-Thu 16:00-20:00, Sat 9:00-13:00" /></Field>
         <Field label="Client rate per hour" hint="What families pay"><Input type="text" inputMode="decimal" name="hourlyClientRate" defaultValue={tutor?.hourlyClientRate ?? ""} placeholder="90.00" /></Field>
         <Field label="Pay per hour"><Input type="text" inputMode="decimal" name="hourlyPayRate" defaultValue={tutor?.hourlyPayRate ?? ""} placeholder="45.00" /></Field>
         <Field label="Or pay percent" hint="Of the lesson price; wins over hourly"><Input type="text" inputMode="numeric" name="payPercent" defaultValue={tutor?.payPercent ?? ""} placeholder="50" /></Field>

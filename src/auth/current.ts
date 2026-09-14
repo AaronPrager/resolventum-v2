@@ -24,11 +24,11 @@ async function devSession(): Promise<SessionUser | null> {
   if (!who) return null;
   const m = await prisma.membership.findFirst({
     where: who.includes("@") ? { user: { email: who.toLowerCase(), deletedAt: null } } : { role: "OWNER", user: { deletedAt: null } },
-    include: { user: true, organization: true },
+    include: { user: true, organization: true, tutor: { select: { timezone: true } } },
     orderBy: { createdAt: "asc" },
   });
   if (!m) return null;
-  return { userId: m.user.id, email: m.user.email, name: m.user.name, organizationId: m.organizationId, organizationName: m.organization.name, timezone: m.organization.timezone, role: m.role, tutorId: m.tutorId };
+  return { userId: m.user.id, email: m.user.email, name: m.user.name, organizationId: m.organizationId, organizationName: m.organization.name, timezone: (m.role === "TUTOR" && m.tutor?.timezone) || m.organization.timezone, organizationTimezone: m.organization.timezone, role: m.role, tutorId: m.tutorId };
 }
 
 export async function currentSession(): Promise<SessionUser | null> {
