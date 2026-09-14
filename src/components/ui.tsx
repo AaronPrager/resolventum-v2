@@ -175,9 +175,17 @@ export function Card({ title, description, children, className, actions }: { tit
   );
 }
 
-export function Stat({ label, value, tone, icon, ...props }: { label: ReactNode; value: ReactNode; tone?: "owed" | "credit" | "muted"; icon?: ReactNode } & ComponentProps<"div">) {
+export function Stat({ label, value, tone, icon, wash, ...props }: { label: ReactNode; value: ReactNode; tone?: "owed" | "credit" | "muted"; icon?: ReactNode; /** A light wash from the top-left, tinted by the tone. The dashboard uses it. */ wash?: boolean } & ComponentProps<"div">) {
   return (
-    <div {...props} className="min-w-0 rounded-2xl border border-line bg-surface px-3 py-3 shadow-sm sm:px-4 sm:py-3.5">
+    <div
+      {...props}
+      className={cx(
+        "min-w-0 rounded-2xl border border-line px-3 py-3 shadow-sm sm:px-4 sm:py-3.5",
+        wash
+          ? cx("bg-gradient-to-br", tone === "owed" ? "from-owed-soft/70 via-surface to-surface" : tone === "credit" ? "from-credit-soft/70 via-surface to-surface" : "from-brand-soft/60 via-surface to-surface")
+          : "bg-surface",
+      )}
+    >
       <div className="flex items-center justify-between gap-2 text-xs text-muted sm:text-[13px]">
         <span className="truncate">{label}</span>
         {icon && <span className="hidden text-faint sm:inline [&_svg]:size-4">{icon}</span>}

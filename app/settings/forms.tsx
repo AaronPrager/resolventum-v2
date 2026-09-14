@@ -29,8 +29,12 @@ export function OrganizationForm({ org, zones, canEdit }: { org: { name: string;
 export interface PayRateRow { subject: string; hourly: string; percent: string }
 export interface TutorValues { id: string; name: string; email: string; phone: string; color: string; subjects: string; hourlyClientRate: string; hourlyPayRate: string; payPercent: string; availability: string; timezone: string; notes: string; payRates: PayRateRow[] }
 
-export function TutorForm({ tutor, zones }: { tutor?: TutorValues; zones: string[] }) {
-  const [state, action, pending] = useActionState(saveTutorAction, {} as ActionState);
+export function TutorForm({ tutor, zones, onDone }: { tutor?: TutorValues; zones: string[]; onDone?: () => void }) {
+  const [state, action, pending] = useActionState(async (prev: ActionState, fd: FormData) => {
+    const r = await saveTutorAction(prev, fd);
+    if (r.ok) onDone?.();
+    return r;
+  }, {} as ActionState);
   const [rates, setRates] = useState<PayRateRow[]>(tutor?.payRates ?? []);
   return (
     <form action={action} className="space-y-4" data-testid={tutor ? `tutor-form-${tutor.id}` : "tutor-form-new"}>
@@ -71,8 +75,11 @@ export function TutorForm({ tutor, zones }: { tutor?: TutorValues; zones: string
           <Button type="button" variant="ghost" className="h-8" onClick={() => setRates((rows) => [...rows, { subject: "", hourly: "", percent: "" }])}>Add a subject rule</Button>
         </AddRow>
       </fieldset>
-      <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
-      <Button type="submit" variant={tutor ? "secondary" : "primary"} disabled={pending}>{pending ? "Saving" : tutor ? "Save" : "Add tutor"}</Button>
+      <FormError>{state.error}</FormError>{!onDone && <FormOk>{state.ok}</FormOk>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="primary" disabled={pending}>{pending ? "Saving" : tutor ? "Save" : "Add tutor"}</Button>
+        {onDone && <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>}
+      </div>
     </form>
   );
 }

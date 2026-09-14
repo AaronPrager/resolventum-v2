@@ -68,11 +68,12 @@ test("settings: save the school profile, add a tutor with a rate, change passwor
   await page.getByTestId("org-form").getByRole("button", { name: "Save" }).click();
 
   await page.goto("/settings/tutors");
+  await page.getByRole("button", { name: "Add a tutor" }).click();
   const t = page.getByTestId("tutor-form-new");
   await t.getByLabel("Name").fill("E2E Tutor");
   await t.getByLabel("Pay per hour").fill("45");
   await t.getByRole("button", { name: "Add tutor" }).click();
-  await expect(t.getByRole("status")).toHaveText("Saved");
+  // The form folds away and the new tutor appears as a card.
   await expect(page.getByText("E2E Tutor")).toBeVisible();
   await expect(page.getByText("$45.00 per hour")).toBeVisible();
 

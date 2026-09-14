@@ -25,16 +25,16 @@ export default async function Home() {
         actions={<><LinkButton href="/calendar" variant="secondary"><CalendarDays aria-hidden />Calendar</LinkButton><LinkButton href="/leads" variant="secondary"><UserPlus aria-hidden />Leads</LinkButton></>} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="dashboard-week">
-        <Stat label={`Lessons this week`} value={d.week.lessons} tone="muted" />
-        <Stat label="Hours" value={d.week.hours} tone="muted" />
-        <Stat label="Still to teach" value={d.week.left} tone="muted" />
-        <Stat label="Cancelled or missed" value={d.week.cancelled + d.week.noShows} tone={d.week.cancelled + d.week.noShows ? "owed" : "muted"} />
+        <Stat wash label={`Lessons this week`} value={d.week.lessons} tone="muted" />
+        <Stat wash label="Hours" value={d.week.hours} tone="muted" />
+        <Stat wash label="Still to teach" value={d.week.left} tone="muted" />
+        <Stat wash label="Cancelled or missed" value={d.week.cancelled + d.week.noShows} tone={d.week.cancelled + d.week.noShows ? "owed" : "muted"} />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="dashboard-month">
-        <Stat label={`Collected in ${monthLabel}`} value={formatCents(m.collectedCents)} tone="credit" />
-        <Stat label="Owed to you" value={formatCents(d.money.owedCents)} tone={d.money.owedCents ? "owed" : "muted"} />
-        <Stat label="Unearned (credit held)" value={formatCents(d.money.creditHeldCents)} tone="muted" />
-        <Stat label={`Margin, ${monthLabel}`} value={m.unpricedLessons ? "set pay rates" : formatCents(m.marginCents)} tone={m.marginCents >= 0 ? "credit" : "owed"} />
+        <Stat wash label={`Collected in ${monthLabel}`} value={formatCents(m.collectedCents)} tone="credit" />
+        <Stat wash label="Owed to you" value={formatCents(d.money.owedCents)} tone={d.money.owedCents ? "owed" : "muted"} />
+        <Stat wash label="Unearned (credit held)" value={formatCents(d.money.creditHeldCents)} tone="muted" />
+        <Stat wash label={`Margin, ${monthLabel}`} value={m.unpricedLessons ? "set pay rates" : formatCents(m.marginCents)} tone={m.marginCents >= 0 ? "credit" : "owed"} />
       </div>
       <p className="-mt-3 text-xs text-muted">Margin is lessons charged this month ({formatCents(m.lessonsChargedCents)}) less tutor pay ({formatCents(m.tutorPayCents)}). Unearned is money families paid ahead that lessons have not used yet.</p>
 
