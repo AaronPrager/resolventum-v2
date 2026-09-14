@@ -21,7 +21,7 @@ describe("leads", () => {
     expect(lead.parentEmail).toBe("olga@example.com");
     await setLeadStatus(prisma, orgId, lead.id, "CONSULT_BOOKED", { consultAt: new Date("2026-09-20T18:00:00Z") });
     await expect(setLeadStatus(prisma, orgId, lead.id, "LOST")).rejects.toThrow(/why/);
-    await expect(setLeadStatus(prisma, orgId, lead.id, "ENROLLED")).rejects.toThrow(/enrol/);
+    await expect(setLeadStatus(prisma, orgId, lead.id, "ENROLLED")).rejects.toThrow(/enroll/);
     expect((await listLeads(prisma, orgId)).map((l) => l.id)).toContain(lead.id);
     await setLeadStatus(prisma, orgId, lead.id, "LOST", { lostReason: "Too far to drive" });
     expect((await listLeads(prisma, orgId)).map((l) => l.id)).not.toContain(lead.id);

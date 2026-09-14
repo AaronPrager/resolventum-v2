@@ -66,7 +66,7 @@ export function MoveLeadForm({ leadId, status }: { leadId: string; status: strin
   );
 }
 
-/** Enrol: the student and family account are made from the lead. */
+/** Enroll: the student and family account are made from the lead. */
 export function EnrollForm({ leadId, accounts }: { leadId: string; accounts: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState(enrollLeadAction, {} as ActionState);
   return (
@@ -80,7 +80,7 @@ export function EnrollForm({ leadId, accounts }: { leadId: string; accounts: { i
           </Select>
         </Field>
         <Field label="New account name" hint="Empty uses the student's name"><Input name="accountName" placeholder="The Marquez family" /></Field>
-        <Button type="submit" disabled={pending}>{pending ? "Enrolling" : "Enrol as a student"}</Button>
+        <Button type="submit" disabled={pending}>{pending ? "Enrolling" : "Enroll as a student"}</Button>
       </div>
       <FormError>{state.error}</FormError>
     </form>

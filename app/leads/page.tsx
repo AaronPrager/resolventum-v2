@@ -31,7 +31,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        subtitle={`${OPEN.reduce((n, st) => n + byStage(st).length, 0)} open. Inquiry, consult, trial, then enrol or say why not. The sign-up link in Settings lands here.`}
+        subtitle={`${OPEN.reduce((n, st) => n + byStage(st).length, 0)} open. Inquiry, consult, trial, then enroll or say why not. The sign-up link under Office lands here.`}
         actions={<><LinkButton href={closed ? "/leads" : "/leads?closed=1"} variant="secondary">{closed ? "Open only" : "Show enrolled and lost"}</LinkButton><a href="/api/export?what=leads" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium shadow-xs hover:bg-surface-2"><FileDown className="size-4" aria-hidden />CSV</a></>}
       />
       {canEdit && (
@@ -60,7 +60,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                         {l.consultAt && (l.status === "CONSULT_BOOKED" || l.status === "TRIAL") && <div className="mt-1 text-xs text-brand">{formatWhen(l.consultAt, s.timezone)}</div>}
                         {l.lostReason && <div className="mt-1 text-xs text-muted">Lost: {l.lostReason}</div>}
                         {l.studentId && <div className="mt-1 text-xs"><Link href={`/students/${l.studentId}`} className="text-brand hover:underline">Open the student</Link></div>}
-                        <div className="mt-1 text-xs text-muted group-open:hidden">{canEdit ? "Open to move, enrol, or edit" : ""}</div>
+                        <div className="mt-1 text-xs text-muted group-open:hidden">{canEdit ? "Open to move, enroll, or edit" : ""}</div>
                       </summary>
                       {canEdit && (
                         <div className="mt-3 space-y-4 border-t border-line pt-3">

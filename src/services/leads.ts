@@ -1,6 +1,6 @@
 /**
  * The pipeline: a family asks about lessons, a consult or trial gets booked,
- * and they enrol or say no. Enrolling makes the student and the family account
+ * and they enroll or say no. Enrolling makes the student and the family account
  * from what the lead already holds. A lost lead keeps its reason.
  */
 import type { PrismaClient } from "../../generated/prisma/client";
@@ -65,7 +65,7 @@ export async function setLeadStatus(db: PrismaClient, organizationId: string, le
   const lead = await db.lead.findFirst({ where: { id: leadId, organizationId } });
   if (!lead) throw new LeadError("Lead not found");
   if (!LEAD_STATUSES.includes(status)) throw new LeadError("Pick a stage");
-  if (status === "ENROLLED") throw new LeadError("Use enrol to make the student");
+  if (status === "ENROLLED") throw new LeadError("Use enroll to make the student");
   if (status === "LOST" && !clean(extra.lostReason)) throw new LeadError("Say why they did not go ahead, in a few words");
   if ((status === "CONSULT_BOOKED" || status === "TRIAL") && extra.consultAt !== undefined && extra.consultAt !== null && Number.isNaN(extra.consultAt.getTime())) throw new LeadError("The time is not valid");
   return db.lead.update({
@@ -79,7 +79,7 @@ export async function setLeadStatus(db: PrismaClient, organizationId: string, le
 }
 
 /**
- * Enrol: make the student, on a new family account with the parent as the
+ * Enroll: make the student, on a new family account with the parent as the
  * main contact or on an existing account, and close the lead.
  */
 export async function enrollLead(db: PrismaClient, organizationId: string, leadId: string, family: { accountId: string } | { accountName?: string | null } = {}) {

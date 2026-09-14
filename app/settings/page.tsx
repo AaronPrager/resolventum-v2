@@ -68,7 +68,7 @@ export default async function SettingsPage() {
       </Card>
       <Card title="Family sign-up link">
         <div className="space-y-3 text-sm" data-testid="intake-card">
-          <p className="text-muted">Share this link on your website or in a text. A family fills in the student, the parent, and what they want help with, and an inquiry lands in <a href="/leads" className="text-brand hover:underline">Leads</a>, ready to book a consult or enrol.</p>
+          <p className="text-muted">Share this link on your website or in a text. A family fills in the student, the parent, and what they want help with, and an inquiry lands in <a href="/leads" className="text-brand hover:underline">Leads</a>, ready to book a consult or enroll.</p>
           {intakeOn ? <CopyLink url={`${origin}/join/${org.intakeCode}`} testId="intake-link" /> : <p>Off.</p>}
           {session.role === "OWNER" && (
             <div className="flex flex-wrap gap-2">
