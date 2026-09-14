@@ -6,12 +6,13 @@ import { prisma } from "@/src/db";
 import { AccountError, signUp } from "@/src/auth/account";
 import { signInAndSetCookie } from "@/src/auth/current";
 import { rateLimit } from "@/src/lib/ratelimit";
+import { REGISTRATION_CLOSED_MESSAGE, registrationOpen } from "@/src/auth/registration";
 
 export interface SignupState { error?: string }
 const str = (fd: FormData, k: string) => { const v = fd.get(k); return typeof v === "string" ? v.trim() : ""; };
 
 export async function signupAction(_p: SignupState, fd: FormData): Promise<SignupState> {
-  if (process.env.REGISTRATION_OPEN === "false") return { error: "Sign-up is closed right now." };
+  if (!registrationOpen()) return { error: REGISTRATION_CLOSED_MESSAGE };
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0] ?? "local";
   if (!rateLimit(`signup:${ip}`, 5, 3600000).ok) return { error: "Too many sign-ups from this network. Try again later." };

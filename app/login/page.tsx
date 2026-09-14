@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { currentSession } from "@/src/auth/current";
 import { LoginForm } from "./LoginForm";
 import { AuthShell } from "@/app/AuthShell";
+import { registrationOpen } from "@/src/auth/registration";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <LoginForm next={next ?? "/"} />
         <div className="mt-5 flex justify-between text-sm text-muted">
           <a href="/forgot" className="text-brand hover:underline">Forgot password</a>
-          {process.env.REGISTRATION_OPEN !== "false" && <a href="/signup" className="text-brand hover:underline">Create an account</a>}
+          {registrationOpen() ? <a href="/signup" className="text-brand hover:underline">Create an account</a> : <span className="text-faint" title="Currently not accepting new accounts">Sign-up closed</span>}
         </div>
     </AuthShell>
   );

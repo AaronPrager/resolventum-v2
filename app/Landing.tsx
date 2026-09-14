@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, BarChart3, CalendarDays, FileDown, HandCoins, Landmark, NotebookPen, ScrollText, Shield, Sparkles, UserPlus } from "lucide-react";
 import { Logo } from "./Logo";
+import { REGISTRATION_CLOSED_MESSAGE } from "@/src/auth/registration";
 
 /**
  * The signed-out front page. Dark, one accent, the same shape as the first
@@ -61,6 +62,7 @@ export function Landing({ signupOpen }: { signupOpen: boolean }) {
                 </Link>
                 {signupOpen && <Link href="/login" className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">I already have an account</Link>}
               </div>
+              {!signupOpen && <p className="mt-4 max-w-xl rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100" role="status">{REGISTRATION_CLOSED_MESSAGE}</p>}
               <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-slate-400">
                 <span className="inline-flex items-center gap-2"><Shield className="size-4 text-emerald-400/90" aria-hidden />Every charge and payment kept, never deleted</span>
                 <span className="inline-flex items-center gap-2"><ScrollText className="size-4 text-indigo-300/90" aria-hidden />Statements, invoices, and agreements as PDFs</span>
@@ -132,7 +134,7 @@ export function Landing({ signupOpen }: { signupOpen: boolean }) {
             </div>
             <div className="relative max-w-2xl">
               <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Ready to simplify your back office?</h2>
-              <p className="mt-3 text-indigo-100/95">Free for one tutor. Type in your students and their balances, and the first lesson is ten minutes away. Nothing to import, nothing to migrate.</p>
+              <p className="mt-3 text-indigo-100/95">{signupOpen ? "Free for one tutor. Type in your students and their balances, and the first lesson is ten minutes away. Nothing to import, nothing to migrate." : "We are currently not accepting new accounts. Schools already on Resolventum sign in below; everyone else can write to us and hear when sign-up opens."}</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href={primary.href} className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-indigo-900 shadow-lg transition hover:bg-slate-100">
                   {primary.label}<ArrowRight className="size-4" aria-hidden />

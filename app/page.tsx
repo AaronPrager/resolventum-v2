@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertTriangle, CalendarDays, NotebookPen, UserPlus } from "lucide-react";
 import { prisma } from "@/src/db";
 import { currentSession } from "@/src/auth/current";
+import { registrationOpen } from "@/src/auth/registration";
 import { Landing } from "./Landing";
 import { formatCents, formatWhen } from "@/src/lib/format";
 import { ownerDashboard } from "@/src/services/dashboard";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 /** Signed out: the front page. Signed in: the owner's home, with the week, the month's money, and what needs a hand. Tutors start on the calendar. */
 export default async function Home() {
   const s = await currentSession();
-  if (!s) return <Landing signupOpen={process.env.REGISTRATION_OPEN !== "false"} />;
+  if (!s) return <Landing signupOpen={registrationOpen()} />;
   if (s.role === "TUTOR") redirect("/calendar");
   const d = await ownerDashboard(prisma, s.organizationId, s.timezone);
   const m = d.monthly;

@@ -83,7 +83,7 @@ puts the database back to a known state.
 
 ## Accounts, sign-in, roles
 
-`/signup` creates a school with its owner (closed when `REGISTRATION_OPEN=false`).
+`/signup` creates a school with its owner. It is closed unless `REGISTRATION_OPEN=true`; closed, the page, the sign-in link, and the landing page say that Resolventum is currently not accepting new accounts. Invitations still work.
 `/forgot` emails a one-hour reset link; `/reset/<token>` sets the password
 and signs every device out. Settings has change-password, the school
 profile, and tutors. Login, sign-up, and reset are rate limited per address
