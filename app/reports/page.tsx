@@ -46,9 +46,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <TableWrap><Table data-testid="income-by-kind">
           <tbody>
             {([
-              ["Tutoring lessons", income.tutoringCents],
-              ["College counseling", income.counselingCents],
-              ["Lessons with no category", income.uncategorizedLessonsCents],
+              ...income.lessonsByCategory.map((c) => [`${c.name} lessons`, c.cents] as [string, number]),
+              [income.lessonsByCategory.length ? "Lessons with no category" : "Lessons", income.uncategorizedLessonsCents],
               ["Fees", income.feesCents],
               ["Tips", income.tipsCents],
               ["Other charges", income.otherChargesCents],
@@ -60,7 +59,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             {income.refundsCents > 0 && <tr><Td className="text-muted">Refunds given</Td><Td right num className="text-owed">−{formatCents(income.refundsCents)}</Td><Td /></tr>}
           </tbody>
         </Table></TableWrap>
-        <p className="mt-2 text-xs text-muted">Set a lesson&apos;s category to split tutoring from college counseling. Imported lessons without one land in &quot;no category&quot;.</p>
+        <p className="mt-2 text-xs text-muted">Lessons are grouped by the categories under Office. Lessons without one land in &quot;no category&quot;.</p>
       </Card>
 
       <Card title="Month by month">

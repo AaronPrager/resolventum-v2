@@ -11,6 +11,7 @@
 import type { PrismaClient } from "../../generated/prisma/client";
 import { localDateOnly, localDateStr } from "../lib/tz";
 import { rebuildAccountAllocations } from "./allocation";
+import { checkLessonCategory } from "./lessonCategories";
 
 export type Db = PrismaClient;
 
@@ -36,7 +37,8 @@ export interface LessonInput {
   locationType?: "IN_PERSON" | "REMOTE";
   meetingLink?: string | null;
   notes?: string | null;
-  category?: "TUTORING" | "COLLEGE_COUNSELING" | null;
+  /** One of the school's lesson categories, or null. */
+  categoryId?: string | null;
 }
 
 export class LessonError extends Error {}
@@ -121,6 +123,7 @@ export async function createLesson(db: Db, input: LessonInput, createdById?: str
     if (!tutor) throw new LessonError("Tutor not found");
   }
   const status = input.startsAt <= new Date() ? "COMPLETED" : "SCHEDULED";
+  const categoryId = await checkLessonCategory(db, organizationId, input.categoryId);
 
   const lesson = await db.$transaction(async (tx) => {
     const lesson = await tx.lesson.create({
@@ -131,7 +134,7 @@ export async function createLesson(db: Db, input: LessonInput, createdById?: str
         durationMin: input.durationMin,
         allDay: !!input.allDay,
         subject: input.subject.trim(),
-        category: input.category ?? null,
+        categoryId,
         locationType: input.locationType ?? "IN_PERSON",
         meetingLink: input.meetingLink?.trim() || null,
         notes: input.notes?.trim() || null,
@@ -161,7 +164,7 @@ export interface LessonUpdate {
   locationType?: "IN_PERSON" | "REMOTE";
   meetingLink?: string | null;
   notes?: string | null;
-  category?: "TUTORING" | "COLLEGE_COUNSELING" | null;
+  categoryId?: string | null;
 }
 
 /** Edit a lesson and its roster. Charges follow: price, date, and description are kept in step. */
@@ -205,6 +208,7 @@ export async function updateLesson(db: Db, lessonId: string, patch: LessonUpdate
   }
   const status = cancelled ? lesson.status : next.startsAt <= new Date() ? "COMPLETED" : "SCHEDULED";
   const groupSize = wanted.length;
+  const categoryId = patch.categoryId !== undefined ? await checkLessonCategory(db, lesson.organizationId, patch.categoryId) : undefined;
 
   await db.$transaction(async (tx) => {
     await tx.lesson.update({
@@ -219,7 +223,7 @@ export async function updateLesson(db: Db, lessonId: string, patch: LessonUpdate
         ...(patch.locationType !== undefined ? { locationType: patch.locationType } : {}),
         ...(patch.meetingLink !== undefined ? { meetingLink: patch.meetingLink?.trim() || null } : {}),
         ...(patch.notes !== undefined ? { notes: patch.notes?.trim() || null } : {}),
-        ...(patch.category !== undefined ? { category: patch.category } : {}),
+        ...(categoryId !== undefined ? { categoryId } : {}),
       },
     });
     for (const seat of removed) {

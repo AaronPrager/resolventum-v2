@@ -55,13 +55,13 @@ export async function exportCsv(db: PrismaClient, organizationId: string, kind: 
       ) };
     }
     case "lessons": {
-      const rows = await db.lesson.findMany({ where: { organizationId, deletedAt: null }, include: { tutor: { select: { name: true } }, students: { include: { student: { select: { firstName: true, lastName: true } }, charge: { select: { amountCents: true, voidedAt: true } } } } }, orderBy: { startsAt: "asc" } });
+      const rows = await db.lesson.findMany({ where: { organizationId, deletedAt: null }, include: { tutor: { select: { name: true } }, category: { select: { name: true } }, students: { include: { student: { select: { firstName: true, lastName: true } }, charge: { select: { amountCents: true, voidedAt: true } } } } }, orderBy: { startsAt: "asc" } });
       const out: (string | number | null)[][] = [];
       for (const l of rows) {
-        if (l.students.length === 0) out.push([localDateStr(l.startsAt, tz), l.allDay ? "" : localTimeStr(l.startsAt, tz), l.durationMin, l.subject, "", l.tutor?.name ?? null, l.status.toLowerCase(), l.locationType.toLowerCase().replace("_", " "), "", "", l.seriesId ? "yes" : "", l.notes, l.id]);
-        for (const s of l.students) out.push([localDateStr(l.startsAt, tz), l.allDay ? "" : localTimeStr(l.startsAt, tz), l.durationMin, l.subject, name(s.student), l.tutor?.name ?? null, s.status.toLowerCase(), l.locationType.toLowerCase().replace("_", " "), money(s.priceCents), s.charge && !s.charge.voidedAt ? money(s.charge.amountCents) : "0.00", l.seriesId ? "yes" : "", l.notes, l.id]);
+        if (l.students.length === 0) out.push([localDateStr(l.startsAt, tz), l.allDay ? "" : localTimeStr(l.startsAt, tz), l.durationMin, l.subject, l.category?.name ?? null, "", l.tutor?.name ?? null, l.status.toLowerCase(), l.locationType.toLowerCase().replace("_", " "), "", "", l.seriesId ? "yes" : "", l.notes, l.id]);
+        for (const s of l.students) out.push([localDateStr(l.startsAt, tz), l.allDay ? "" : localTimeStr(l.startsAt, tz), l.durationMin, l.subject, l.category?.name ?? null, name(s.student), l.tutor?.name ?? null, s.status.toLowerCase(), l.locationType.toLowerCase().replace("_", " "), money(s.priceCents), s.charge && !s.charge.voidedAt ? money(s.charge.amountCents) : "0.00", l.seriesId ? "yes" : "", l.notes, l.id]);
       }
-      return { filename: `lessons-${day}.csv`, csv: toCsv(["Date", "Time", "Minutes", "Subject", "Student", "Tutor", "Status", "Where", "Price", "Charged", "Weekly", "Notes", "Lesson id"], out) };
+      return { filename: `lessons-${day}.csv`, csv: toCsv(["Date", "Time", "Minutes", "Subject", "Category", "Student", "Tutor", "Status", "Where", "Price", "Charged", "Weekly", "Notes", "Lesson id"], out) };
     }
     case "expenses": {
       const rows = await db.expense.findMany({ where: { organizationId }, include: { vendor: true, category: true, paymentSource: true, tutor: { select: { name: true } } }, orderBy: { spentOn: "asc" } });

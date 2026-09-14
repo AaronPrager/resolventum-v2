@@ -49,13 +49,14 @@ function compare(a: Key, b: Key): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
-type El = ReactElement<{ children?: ReactNode; className?: string; onClick?: () => void; "aria-sort"?: string; "data-row"?: number }>;
+type El = ReactElement<{ children?: ReactNode; className?: string; onClick?: () => void; "aria-sort"?: string; "data-row"?: string }>;
 const isTag = (node: ReactNode, tag: string): node is El => isValidElement(node) && node.type === tag;
 
 export function SortableTable({ children, ...props }: ComponentProps<"table">) {
   const ref = useRef<HTMLTableElement>(null);
   const [sort, setSort] = useState<Sort | null>(null);
-  const [order, setOrder] = useState<number[] | null>(null);
+  /** Row positions in display order, or null for the page's own order. Kept with the row count it was made for: when the page changes its rows, the order is dropped rather than applied to the wrong rows. */
+  const [order, setOrder] = useState<{ ids: string[]; count: number } | null>(null);
 
   const kids = Children.toArray(children);
   const thead = kids.find((k) => isTag(k, "thead"));
@@ -63,21 +64,24 @@ export function SortableTable({ children, ...props }: ComponentProps<"table">) {
   const rows = tbody ? Children.toArray(tbody.props.children) : [];
   const sortable = !!thead && !!tbody && rows.length > 1 && rows.every((r) => isTag(r, "tr"));
   if (!sortable) return <table ref={ref} {...props}>{children}</table>;
+  // Rows are known by position. Keys would be nicer, but they differ between the server and the browser.
+  const ids = rows.map((_, i) => String(i));
+  const byId = new Map(ids.map((id, i) => [id, rows[i] as El]));
+  const live = order && order.count === rows.length ? order.ids : null;
 
   function clickHeading(col: number) {
     const table = ref.current;
     if (!table) return;
     const dir: 1 | -1 = sort?.col === col ? (sort.dir === 1 ? -1 : 1) : 1;
-    // Read the keys from the page: the rows carry their original index however they are ordered now.
-    const keys = new Map<number, Key>();
+    // Read the keys from the page: the rows carry their id however they are ordered now.
+    const keys = new Map<string, Key>();
     for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-      const i = Number(tr.dataset.row);
       const td = tr.cells[col];
-      keys.set(i, td ? keyOf(td) : null);
+      keys.set(tr.dataset.row ?? "", td ? keyOf(td) : null);
     }
-    const next = rows.map((_, i) => i).sort((a, b) => compare(keys.get(a) ?? null, keys.get(b) ?? null) * dir || a - b);
+    const next = [...ids].sort((a, b) => compare(keys.get(a) ?? null, keys.get(b) ?? null) * dir || ids.indexOf(a) - ids.indexOf(b));
     setSort({ col, dir });
-    setOrder(next);
+    setOrder({ ids: next, count: rows.length });
   }
 
   const headRow = Children.toArray(thead!.props.children).find((r) => isTag(r, "tr"));
@@ -86,7 +90,7 @@ export function SortableTable({ children, ...props }: ComponentProps<"table">) {
         if (!isTag(th, "th")) return th;
         const label = Children.toArray(th.props.children).some((c) => typeof c === "string" ? c.trim() : true);
         if (!label) return th;
-        const active = sort?.col === col;
+        const active = sort?.col === col && live !== null;
         return cloneElement(th, {
           key: col,
           onClick: () => clickHeading(col),
@@ -96,7 +100,8 @@ export function SortableTable({ children, ...props }: ComponentProps<"table">) {
       })))
     : thead!;
 
-  const ordered = (order ?? rows.map((_, i) => i)).map((i) => cloneElement(rows[i] as El, { key: `r${i}`, "data-row": i }));
+  const shown = live ?? ids;
+  const ordered = shown.map((id) => cloneElement(byId.get(id)!, { key: (byId.get(id)!.key as string | null) ?? id, "data-row": id }));
   const body = cloneElement(tbody!, {}, ordered);
   const rest = kids.filter((k) => k !== thead && k !== tbody);
   return <table ref={ref} {...props}>{head}{body}{rest}</table>;

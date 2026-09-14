@@ -384,14 +384,18 @@ async function main() {
   });
 
   // 6. Lessons, seats, charges. All three rows share the v1 lesson id.
-  const categoryFor: Record<string, "TUTORING" | "COLLEGE_COUNSELING"> = { Tutoring: "TUTORING", "College Counseling": "COLLEGE_COUNSELING" };
+  // v1 category names become rows in the school's own list, made on first use.
+  const categoryIds = new Map<string, string>();
+  for (const name of new Set(lessons.map((l) => l.category).filter((c): c is string => !!c))) {
+    const row = await prisma.lessonCategory.upsert({ where: { organizationId_name: { organizationId: orgId, name } }, update: {}, create: { organizationId: orgId, name } });
+    categoryIds.set(name, row.id);
+  }
   const now = new Date();
   const lessonRows = [];
   const seatRows = [];
   const chargeRows = [];
   for (const l of lessons) {
     if (!l.studentId) continue;
-    if (l.category && !categoryFor[l.category]) fail(`unknown lesson category ${l.category}`);
     let lessonNotes: string | null = l.notes ?? null;
     if (l.notesFiles) {
       try {
@@ -426,7 +430,7 @@ async function main() {
       durationMin: l.duration,
       allDay: Boolean(l.allDay),
       subject: subjectFor(l),
-      category: l.category ? categoryFor[l.category] : null,
+      categoryId: l.category ? categoryIds.get(l.category) ?? null : null,
       locationType: l.locationType === "remote" ? ("REMOTE" as const) : ("IN_PERSON" as const),
       meetingLink: l.link ?? null,
       notes: lessonNotes,

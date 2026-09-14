@@ -12,6 +12,7 @@ import { formatRule, parseRule, weeklyOccurrences, weeklyOccurrencesAfter } from
 import { rebuildAccountAllocations } from "./allocation";
 import { type CancelOptions, LessonError, type LessonInput, type LessonUpdate, addSeat, cancelLesson, deleteLesson, resolveRoster, updateLesson } from "./lessons";
 import { holidayRanges } from "./holidays";
+import { checkLessonCategory } from "./lessonCategories";
 
 export const HORIZON_DAYS = 180;
 
@@ -38,6 +39,7 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
 
   const { seats, organizationId, timezone: tz } = await resolveRoster(db, input);
   if (!input.subject.trim()) throw new LessonError(seats.length ? "Subject is required" : "A title is required for an event with no student");
+  const categoryId = await checkLessonCategory(db, organizationId, input.categoryId);
   const firstDate = localDateStr(input.startsAt, tz);
   if (input.until && input.until < firstDate) throw new LessonError("Repeat-until is before the first lesson");
 
@@ -57,7 +59,7 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
       const lesson = await tx.lesson.create({
         data: {
           organizationId, tutorId: input.tutorId ?? null, seriesId: series.id, startsAt, durationMin: input.durationMin, allDay: !!input.allDay,
-          subject: input.subject.trim(), category: input.category ?? null, locationType: input.locationType ?? "IN_PERSON",
+          subject: input.subject.trim(), categoryId, locationType: input.locationType ?? "IN_PERSON",
           meetingLink: input.meetingLink?.trim() || null, notes: input.notes?.trim() || null, status, createdById: createdById ?? null,
         },
       });
@@ -107,7 +109,7 @@ export async function extendOpenSeries(db: PrismaClient, organizationId: string,
         const lesson = await tx.lesson.create({
           data: {
             organizationId, tutorId: last.tutorId, seriesId: s.id, startsAt, durationMin: last.durationMin, allDay: last.allDay, subject: last.subject,
-            category: last.category, locationType: last.locationType, meetingLink: last.meetingLink, status: "SCHEDULED",
+            categoryId: last.categoryId, locationType: last.locationType, meetingLink: last.meetingLink, status: "SCHEDULED",
           },
         });
         created++;

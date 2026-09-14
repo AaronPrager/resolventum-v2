@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
 import { studentChoices } from "@/src/services/students";
+import { listLessonCategories } from "@/src/services/lessonCategories";
 import { requireSession } from "@/src/auth/current";
 import { emailConfigured } from "@/src/email/send";
 import { formatCents, formatWhen, localDateStr, localTimeStr } from "@/src/lib/format";
@@ -36,6 +37,7 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
   const group = lesson.students.length > 1;
   const choices = await studentChoices(prisma, lesson.organizationId, lesson.students.map((s) => s.studentId));
   const tz = lesson.organization.timezone;
+  const categories = await listLessonCategories(prisma, lesson.organizationId, { include: lesson.categoryId ? [lesson.categoryId] : [] });
   const tutors = (await prisma.tutor.findMany({ where: { organizationId: lesson.organizationId, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, hourlyClientRateCents: true, subjects: true, availability: true } }))
     .map((t) => ({ id: t.id, name: t.name, clientRateCents: t.hourlyClientRateCents, subjects: t.subjects, availability: t.availability }));
   const back = returnTo ?? (seat ? `/students/${seat.studentId}` : "/calendar");
@@ -92,11 +94,12 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
           inSeries={lesson.seriesId !== null}
           returnTo={returnTo}
           tutors={tutors}
+          categories={categories.map((c) => ({ id: c.id, name: c.name }))}
           submitLabel="Save"
           initial={{
             date: localDateStr(lesson.startsAt, tz), time: localTimeStr(lesson.startsAt, tz), durationMin: lesson.durationMin, subject: lesson.subject,
             seats: lesson.students.map((s) => ({ studentId: s.studentId, price: (s.priceCents / 100).toFixed(2) })), tutorId: lesson.tutorId ?? "", locationType: lesson.locationType,
-            meetingLink: lesson.meetingLink ?? "", notes: lesson.notes ?? "", category: lesson.category ?? "", allDay: lesson.allDay,
+            meetingLink: lesson.meetingLink ?? "", notes: lesson.notes ?? "", categoryId: lesson.categoryId ?? "", allDay: lesson.allDay,
           }}
         />
       </Card>

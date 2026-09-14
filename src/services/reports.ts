@@ -157,8 +157,8 @@ export async function studentsByRevenue(db: PrismaClient, organizationId: string
 }
 
 export interface IncomeByKind {
-  tutoringCents: number;
-  counselingCents: number;
+  /** Lessons by the school's own categories, largest first. */
+  lessonsByCategory: { name: string; cents: number }[];
   uncategorizedLessonsCents: number;
   feesCents: number;
   tipsCents: number;
@@ -180,8 +180,7 @@ export async function incomeByKind(db: PrismaClient, organizationId: string, yea
   const [split, totals] = await Promise.all([
     db.$queryRaw<{ bucket: string; cents: bigint }[]>`
       select case
-               when c.kind = 'LESSON' and l.category = 'TUTORING' then 'tutoring'
-               when c.kind = 'LESSON' and l.category = 'COLLEGE_COUNSELING' then 'counseling'
+               when c.kind = 'LESSON' and lc.name is not null then 'category:' || lc.name
                when c.kind = 'LESSON' then 'lessons'
                when c.kind = 'FEE' then 'fees'
                when c.kind = 'TIP' then 'tips'
@@ -193,6 +192,7 @@ export async function incomeByKind(db: PrismaClient, organizationId: string, yea
       join "Charge" c on c.id = al."chargeId"
       left join "LessonStudent" ls on ls.id = c."lessonStudentId"
       left join "Lesson" l on l.id = ls."lessonId"
+      left join "LessonCategory" lc on lc.id = l."categoryId"
       where p."organizationId" = ${organizationId} and p."voidedAt" is null and p.kind = 'PAYMENT' and p."paidOn" between ${from} and ${to}
       group by 1`,
     db.$queryRaw<{ received: bigint; refunds: bigint }[]>`
@@ -204,8 +204,7 @@ export async function incomeByKind(db: PrismaClient, organizationId: string, yea
   const received = Number(totals[0]?.received ?? 0);
   const applied = split.reduce((s, r) => s + Number(r.cents), 0);
   return {
-    tutoringCents: get("tutoring"),
-    counselingCents: get("counseling"),
+    lessonsByCategory: split.filter((r) => r.bucket.startsWith("category:")).map((r) => ({ name: r.bucket.slice("category:".length), cents: Number(r.cents) })).sort((a, b) => b.cents - a.cents),
     uncategorizedLessonsCents: get("lessons"),
     feesCents: get("fees"),
     tipsCents: get("tips"),

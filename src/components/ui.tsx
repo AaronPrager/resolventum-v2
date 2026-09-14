@@ -4,7 +4,7 @@
  * looks the same everywhere.
  */
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Plus } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { formatCents } from "@/src/lib/format";
 import { SortableTable } from "./SortableTable";
@@ -18,9 +18,9 @@ function cx(...parts: (string | false | null | undefined)[]) {
 const buttonBase =
   "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0";
 const buttonVariants = {
-  primary: "h-9 bg-brand px-3.5 text-brand-fg shadow-xs hover:bg-brand-strong",
-  secondary: "h-9 border border-line bg-surface px-3.5 text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
-  danger: "h-9 bg-owed px-3.5 text-white shadow-xs hover:opacity-90",
+  primary: "h-9 bg-brand px-3.5 text-brand-fg shadow-sm shadow-brand/20 hover:bg-brand-strong active:translate-y-px",
+  secondary: "h-9 border border-line bg-surface px-3.5 text-fg shadow-xs hover:border-line-strong hover:bg-surface-2 active:translate-y-px",
+  danger: "h-9 border border-owed/30 bg-owed-soft px-3.5 text-owed hover:bg-owed hover:text-white active:translate-y-px",
   ghost: "h-8 px-2.5 text-muted hover:bg-surface-3 hover:text-fg",
   link: "h-auto px-0 font-normal text-brand hover:underline",
 };
@@ -32,6 +32,48 @@ export function Button({ variant = "primary", className, ...props }: ComponentPr
 
 export function LinkButton({ variant = "secondary", className, ...props }: ComponentProps<typeof Link> & { variant?: ButtonVariant }) {
   return <Link {...props} className={cx(buttonBase, buttonVariants[variant], className)} />;
+}
+
+/** A small square button holding one icon: edit, archive, delete. The label is the tooltip and the accessible name. */
+export function IconButton({ label, tone = "neutral", className, children, ...props }: ComponentProps<"button"> & { label: string; tone?: "neutral" | "danger" }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      aria-label={label}
+      title={label}
+      className={cx(
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-faint transition-colors disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4",
+        tone === "danger" ? "hover:bg-owed-soft hover:text-owed" : "hover:bg-surface-3 hover:text-fg",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The icon buttons at the end of a list row. Faint until the row is hovered or one of them has focus; always shown on a touch screen. */
+export function RowActions({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cx("ml-auto inline-flex shrink-0 items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100", className)}>{children}</span>;
+}
+
+/** A list of rows with a hairline between them. Each row is a "group" so RowActions can react to hover. */
+export function Rows({ children, className, ...props }: ComponentProps<"ul">) {
+  return <ul {...props} className={cx("divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface", className)}>{children}</ul>;
+}
+export function Row({ children, className, ...props }: ComponentProps<"li">) {
+  return <li {...props} className={cx("group flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm transition-colors hover:bg-surface-2/70", className)}>{children}</li>;
+}
+
+/** A dashed "add one" row at the foot of a list, holding a small form. */
+export function AddRow({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cx("flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface-2/40 px-3 py-2", className)}>
+      <Plus className="size-4 shrink-0 text-faint" aria-hidden />
+      {children}
+    </div>
+  );
 }
 
 /** Buttons that read as one control: Previous / Today / Next, Day / Week / Month. */
@@ -116,12 +158,15 @@ export function PageHeader({ title, back, subtitle, actions }: { title: ReactNod
   );
 }
 
-export function Card({ title, children, className, actions }: { title?: ReactNode; children: ReactNode; className?: string; actions?: ReactNode }) {
+export function Card({ title, description, children, className, actions }: { title?: ReactNode; description?: ReactNode; children: ReactNode; className?: string; actions?: ReactNode }) {
   return (
-    <section className={cx("rounded-xl border border-line bg-surface p-4 shadow-xs sm:p-5", className)}>
+    <section className={cx("rounded-2xl border border-line bg-surface p-4 shadow-sm sm:p-5", className)}>
       {(title || actions) && (
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
+            {description && <p className="mt-0.5 text-[13px] text-muted">{description}</p>}
+          </div>
           {actions}
         </header>
       )}
@@ -132,7 +177,7 @@ export function Card({ title, children, className, actions }: { title?: ReactNod
 
 export function Stat({ label, value, tone, icon, ...props }: { label: ReactNode; value: ReactNode; tone?: "owed" | "credit" | "muted"; icon?: ReactNode } & ComponentProps<"div">) {
   return (
-    <div {...props} className="min-w-0 rounded-xl border border-line bg-surface px-3 py-3 shadow-xs sm:px-4 sm:py-3.5">
+    <div {...props} className="min-w-0 rounded-2xl border border-line bg-surface px-3 py-3 shadow-sm sm:px-4 sm:py-3.5">
       <div className="flex items-center justify-between gap-2 text-xs text-muted sm:text-[13px]">
         <span className="truncate">{label}</span>
         {icon && <span className="hidden text-faint sm:inline [&_svg]:size-4">{icon}</span>}
@@ -158,8 +203,13 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
   return <span className={cx("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium leading-4", tones[tone])}>{children}</span>;
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="rounded-xl border border-dashed border-line-strong bg-surface-2/60 px-4 py-8 text-center text-sm text-muted">{children}</p>;
+export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line-strong bg-surface-2/50 px-4 py-8 text-center text-sm text-muted">
+      <p>{children}</p>
+      {action}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------- tables
@@ -180,7 +230,7 @@ export function Th({ className, right, ...props }: ComponentProps<"th"> & { righ
   return (
     <th
       {...props}
-      className={cx("whitespace-nowrap border-b border-line pb-2 pr-4 text-left text-xs font-medium text-muted last:pr-0", right && "text-right", className)}
+      className={cx("whitespace-nowrap border-b border-line pb-2 pr-4 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted last:pr-0", right && "text-right", className)}
     />
   );
 }

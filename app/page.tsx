@@ -39,7 +39,7 @@ export default async function Home() {
       <p className="-mt-3 text-xs text-muted">Margin is lessons charged this month ({formatCents(m.lessonsChargedCents)}) less tutor pay ({formatCents(m.tutorPayCents)}). Unearned is money families paid ahead that lessons have not used yet.</p>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title={<span className="inline-flex items-center gap-2"><NotebookPen className="size-4 text-brand" aria-hidden />Notes still to write ({d.notesMissing})</span>}>
+        <Card title={<span className="inline-flex items-center gap-2"><NotebookPen className="size-4 text-brand" aria-hidden />Notes still to write ({d.notesMissing})</span>} actions={<Link href="/notes" className="text-sm text-brand hover:underline">All notes</Link>}>
           {d.notesMissingLessons.length === 0 ? <Empty>Every lesson from the last week has its note.</Empty> : (
             <ul className="divide-y divide-line text-sm" data-testid="notes-missing">
               {d.notesMissingLessons.map((l) => (

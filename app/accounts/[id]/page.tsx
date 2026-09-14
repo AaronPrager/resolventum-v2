@@ -11,8 +11,8 @@ import { ConfirmForm } from "@/src/components/ConfirmForm";
 import { emailConfigured } from "@/src/email/send";
 import { EmailStatement } from "./EmailStatement";
 import { Badge, Balance, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Stat, Table, TableWrap, Td, Th } from "@/src/components/ui";
-import { removeGuardianAction } from "../actions";
-import { AccountForm, GuardianForm } from "./FamilyForms";
+import { AccountForm } from "./FamilyForms";
+import { ContactList } from "./ContactList";
 
 export const dynamic = "force-dynamic";
 
@@ -148,35 +148,11 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
           </div>
           <div>
             <h3 className="mb-2 text-sm font-semibold">Contacts</h3>
-            {account.guardians.length === 0 && <p className="mb-3 text-sm text-muted">No contacts yet. Add a parent so statements have somewhere to go.</p>}
-            <ul className="mb-4 divide-y divide-line rounded-xl border border-line" data-testid="guardians">
-              {account.guardians.map((g) => (
-                <li key={g.id} className="px-4 py-3">
-                  <details className="group">
-                    <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 text-sm [&::-webkit-details-marker]:hidden">
-                      <span className="font-medium">{g.name}</span>
-                      {g.relationship && <span className="text-muted">{g.relationship}</span>}
-                      {g.isPrimary && <Badge tone="brand">main</Badge>}
-                      {g.isBilling && <Badge>statements</Badge>}
-                      {g.isEmergency && <Badge tone="warn">emergency</Badge>}
-                      <span className="text-muted">{[g.email, g.phone].filter(Boolean).join(" · ")}</span>
-                      <span className="ml-auto text-xs text-brand group-open:hidden">Edit</span>
-                    </summary>
-                    <div className="mt-3 space-y-3 border-t border-line pt-3">
-                      <GuardianForm accountId={id} guardian={{ id: g.id, name: g.name, email: g.email ?? "", phone: g.phone ?? "", relationship: g.relationship ?? "", address: g.address ?? "", isPrimary: g.isPrimary, isBilling: g.isBilling, isEmergency: g.isEmergency }} />
-                      <ConfirmForm action={removeGuardianAction} message={`Remove ${g.name} from this account?`}>
-                        <input type="hidden" name="guardianId" value={g.id} /><input type="hidden" name="accountId" value={id} />
-                        <Button variant="link" className="text-xs text-owed">Remove contact</Button>
-                      </ConfirmForm>
-                    </div>
-                  </details>
-                </li>
-              ))}
-            </ul>
-            <details className="rounded-xl border border-dashed border-line-strong px-4 py-3" open={account.guardians.length === 0}>
-              <summary className="cursor-pointer text-sm font-medium text-brand">Add a contact</summary>
-              <div className="mt-3"><GuardianForm accountId={id} /></div>
-            </details>
+            <ContactList
+              accountId={id}
+              canEdit={session.role !== "ACCOUNTANT"}
+              contacts={account.guardians.map((g) => ({ id: g.id, name: g.name, email: g.email ?? "", phone: g.phone ?? "", relationship: g.relationship ?? "", address: g.address ?? "", isPrimary: g.isPrimary, isBilling: g.isBilling, isEmergency: g.isEmergency }))}
+            />
           </div>
         </div>
       </Card>

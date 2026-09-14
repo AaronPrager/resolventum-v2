@@ -11,6 +11,7 @@ import { disableIntake, enableIntake } from "@/src/services/intake";
 import { HolidayError, addHoliday, removeHoliday } from "@/src/services/holidays";
 import { auditAs } from "@/src/services/audit";
 import { AvailabilityError, parseAvailability } from "@/src/lib/availability";
+import { CategoryError, addLessonCategory, deleteLessonCategory, renameLessonCategory, setLessonCategoryArchived } from "@/src/services/lessonCategories";
 
 export interface FeedState { url?: string; error?: string }
 export interface ActionState { error?: string; ok?: string }
@@ -219,4 +220,32 @@ export async function saveAgreementAction(_p: ActionState, fd: FormData): Promis
   await prisma.organization.update({ where: { id: s.organizationId }, data: { agreementTemplate: text.trim() || null } });
   revalidatePath("/settings/agreement");
   return { ok: text.trim() ? "Saved" : "Back to the standard wording" };
+}
+
+export async function saveCategoryAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return { error: "Only the owner can change categories" };
+  const id = str(fd, "categoryId");
+  try {
+    if (id) await renameLessonCategory(prisma, s.organizationId, id, str(fd, "name"));
+    else await addLessonCategory(prisma, s.organizationId, str(fd, "name"));
+  } catch (e) { if (e instanceof CategoryError) return { error: e.message }; throw e; }
+  revalidatePath("/settings");
+  return { ok: id ? "Renamed" : "Added" };
+}
+
+export async function categoryArchiveAction(fd: FormData): Promise<void> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return;
+  await setLessonCategoryArchived(prisma, s.organizationId, str(fd, "categoryId"), str(fd, "archived") === "1").catch((e) => { if (!(e instanceof CategoryError)) throw e; });
+  revalidatePath("/settings");
+}
+
+export async function categoryDeleteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireWriter();
+  if (s.role !== "OWNER") return { error: "Only the owner can change categories" };
+  try { await deleteLessonCategory(prisma, s.organizationId, str(fd, "categoryId")); }
+  catch (e) { if (e instanceof CategoryError) return { error: e.message }; throw e; }
+  revalidatePath("/settings");
+  return { ok: "Deleted" };
 }

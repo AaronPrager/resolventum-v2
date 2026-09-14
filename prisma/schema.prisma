@@ -147,6 +147,7 @@ model Organization {
   taxYears          TaxYear[]
   drafts            Draft[]
   holidays          Holiday[]
+  lessonCategories  LessonCategory[]
   sessionNotes      SessionNote[]
   leads             Lead[]
   auditEvents       AuditEvent[]
@@ -371,9 +372,21 @@ enum LocationType {
   REMOTE
 }
 
-enum LessonCategory {
-  TUTORING
-  COLLEGE_COUNSELING
+/// What a lesson is for, in the school's own words: tutoring, test prep, whatever the owner names.
+/// A per-school list kept under Office; the income report groups lessons by it.
+model LessonCategory {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  archivedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  lessons Lesson[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, archivedAt])
 }
 
 /// A recurring series. Occurrences are real Lesson rows generated ahead of time.
@@ -408,7 +421,8 @@ model Lesson {
   durationMin    Int
   allDay         Boolean         @default(false)
   subject        String
-  category       LessonCategory?
+  categoryId     String?
+  category       LessonCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   locationType   LocationType    @default(IN_PERSON)
   meetingLink    String?
   /// Shown on the calendar.
@@ -431,6 +445,7 @@ model Lesson {
   @@index([organizationId, startsAt])
   @@index([tutorId, startsAt])
   @@index([seriesId])
+  @@index([categoryId])
 }
 
 /// One student's seat in a lesson: their price, attendance, and per-student notes.

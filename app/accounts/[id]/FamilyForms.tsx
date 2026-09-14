@@ -27,8 +27,12 @@ export function AccountForm({ accountId, name, notes, emailReminders, emailNotes
 
 export interface GuardianValues { id?: string; name: string; email: string; phone: string; relationship: string; address: string; isPrimary: boolean; isBilling: boolean; isEmergency: boolean }
 
-export function GuardianForm({ accountId, guardian }: { accountId: string; guardian?: GuardianValues }) {
-  const [state, action, pending] = useActionState(saveGuardianAction, {} as ActionState);
+export function GuardianForm({ accountId, guardian, onDone }: { accountId: string; guardian?: GuardianValues; onDone?: () => void }) {
+  const [state, action, pending] = useActionState(async (prev: ActionState, fd: FormData) => {
+    const r = await saveGuardianAction(prev, fd);
+    if (r.ok) onDone?.();
+    return r;
+  }, {} as ActionState);
   const [key, setKey] = useState(0);
   const g = guardian;
   return (
@@ -56,8 +60,9 @@ export function GuardianForm({ accountId, guardian }: { accountId: string; guard
         <Checkbox name="isEmergency" defaultChecked={g?.isEmergency ?? false} label="Emergency contact" />
       </div>
       <div className="flex items-center gap-3">
-        <Button type="submit" variant={g ? "secondary" : "primary"} disabled={pending}>{pending ? "Saving" : g ? "Save contact" : "Add contact"}</Button>
-        <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
+        <Button type="submit" variant="primary" disabled={pending}>{pending ? "Saving" : g ? "Save contact" : "Add contact"}</Button>
+        {onDone && <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>}
+        <FormError>{state.error}</FormError>{!onDone && <FormOk>{state.ok}</FormOk>}
       </div>
     </form>
   );

@@ -77,7 +77,7 @@ describe("income by kind", () => {
     const k = await incomeByKind(prisma, orgId, 2025);
     const y = await yearSummary(prisma, orgId, 2025, new Date("2026-09-13T00:00:00Z"));
     expect(k.receivedCents).toBe(y.receivedCents);
-    const parts = k.tutoringCents + k.counselingCents + k.uncategorizedLessonsCents + k.feesCents + k.tipsCents + k.otherChargesCents + k.unappliedCents;
+    const parts = k.lessonsByCategory.reduce((s, c) => s + c.cents, 0) + k.uncategorizedLessonsCents + k.feesCents + k.tipsCents + k.otherChargesCents + k.unappliedCents;
     expect(parts).toBe(k.receivedCents);
     expect(k.unappliedCents).toBeGreaterThanOrEqual(0);
   });

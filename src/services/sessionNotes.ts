@@ -179,3 +179,16 @@ export async function shareUnsharedNotes(db: PrismaClient, organizationId: strin
   }
   return { sent, skipped, failed, errors };
 }
+
+/** The latest notes across the school, or one tutor's, newest lesson first. */
+export async function recentSessionNotes(db: PrismaClient, organizationId: string, opts: { tutorId?: string | null; take?: number } = {}) {
+  return db.sessionNote.findMany({
+    where: { organizationId, ...(opts.tutorId ? { lesson: { tutorId: opts.tutorId } } : {}) },
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true } },
+      lesson: { select: { id: true, startsAt: true, subject: true, tutor: { select: { name: true } } } },
+    },
+    orderBy: { lesson: { startsAt: "desc" } },
+    take: opts.take ?? 40,
+  });
+}

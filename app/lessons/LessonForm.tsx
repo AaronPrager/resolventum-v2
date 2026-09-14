@@ -15,7 +15,8 @@ export interface LessonFormValues {
   locationType: "IN_PERSON" | "REMOTE";
   meetingLink: string;
   notes: string;
-  category: "" | "TUTORING" | "COLLEGE_COUNSELING";
+  /** A lesson category id from the school's list, or "". */
+  categoryId: string;
   allDay?: boolean;
   /** The roster. Empty for an event with no student. */
   seats: { studentId: string; price: string }[];
@@ -40,12 +41,14 @@ export interface TutorChoice {
   availability?: string | null;
 }
 
-export function LessonForm({ action, students, lessonId, inSeries, tutors, initial, submitLabel, allowRepeat, returnTo }: {
+export function LessonForm({ action, students, lessonId, inSeries, tutors, categories = [], initial, submitLabel, allowRepeat, returnTo }: {
   action: (prev: ActionState, fd: FormData) => Promise<ActionState>;
   students: StudentChoice[];
   lessonId?: string;
   inSeries?: boolean;
   tutors: TutorChoice[];
+  /** The school's lesson categories, from Office. Hidden when there are none. */
+  categories?: { id: string; name: string }[];
   initial: LessonFormValues;
   submitLabel: string;
   allowRepeat?: boolean;
@@ -164,7 +167,7 @@ export function LessonForm({ action, students, lessonId, inSeries, tutors, initi
           <Select name="tutorId" value={tutorId} onChange={(e) => pickTutor(e.target.value)}><option value="">None</option>{tutors.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
         </Field>
         <Field label="Where"><Select name="locationType" defaultValue={initial.locationType}><option value="IN_PERSON">In person</option><option value="REMOTE">Remote</option></Select></Field>
-        <Field label="Category"><Select name="category" defaultValue={initial.category}><option value="">None</option><option value="TUTORING">Tutoring</option><option value="COLLEGE_COUNSELING">College counseling</option></Select></Field>
+        {categories.length > 0 && <Field label="Category"><Select name="categoryId" defaultValue={initial.categoryId}><option value="">None</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>}
         <Field label="Meeting link" className="col-span-2 sm:col-span-3"><Input type="url" name="meetingLink" defaultValue={initial.meetingLink} /></Field>
         <Field label="Notes" className="col-span-full"><Textarea name="notes" rows={2} defaultValue={initial.notes} /></Field>
       </div>

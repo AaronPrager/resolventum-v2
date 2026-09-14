@@ -7,6 +7,7 @@ import { RoleError, requireWriter } from "@/src/auth/current";
 import { zonedToUtc } from "@/src/lib/tz";
 import { formatCents } from "@/src/lib/format";
 import { LessonError, cancelLesson, createLesson, deleteLesson, issueMakeupCredit, markNoShow, restoreLesson, updateLesson } from "@/src/services/lessons";
+import { CategoryError } from "@/src/services/lessonCategories";
 import { cancelLessonAndFuture, createSeries, deleteLessonAndFuture, updateLessonAndFuture } from "@/src/services/series";
 import { SessionNoteError, deleteSessionNote, saveSessionNote, shareSessionNote } from "@/src/services/sessionNotes";
 import { EmailError } from "@/src/email/send";
@@ -53,7 +54,6 @@ function readLessonForm(fd: FormData, timeZone: string) {
     return { studentId, priceCents };
   });
   const location = str(fd, "locationType");
-  const category = str(fd, "category");
   return {
     startsAt: zonedToUtc(date, time, timeZone),
     allDay,
@@ -65,7 +65,7 @@ function readLessonForm(fd: FormData, timeZone: string) {
     locationType: (location === "REMOTE" ? "REMOTE" : "IN_PERSON") as "REMOTE" | "IN_PERSON",
     meetingLink: str(fd, "meetingLink") || null,
     notes: str(fd, "notes") || null,
-    category: (category === "TUTORING" || category === "COLLEGE_COUNSELING" ? category : null) as "TUTORING" | "COLLEGE_COUNSELING" | null,
+    categoryId: str(fd, "categoryId") || null,
   };
 }
 
@@ -87,7 +87,7 @@ export async function createLessonAction(_prev: ActionState, fd: FormData): Prom
       await auditAs(prisma, session, { action: "lesson.create", subjectType: "lesson", subjectId: l.id, summary: `${input.subject}, ${input.seats.length} student${input.seats.length === 1 ? "" : "s"}, ${formatCents(input.seats.reduce((s, x) => s + x.priceCents, 0))}` });
     }
   } catch (e) {
-    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
+    if (e instanceof LessonError || e instanceof RoleError || e instanceof CategoryError) return { error: e.message };
     throw e;
   }
   revalidatePath("/students", "layout");
@@ -106,7 +106,7 @@ export async function updateLessonAction(_prev: ActionState, fd: FormData): Prom
     else await updateLesson(prisma, lessonId, input);
     await auditAs(prisma, session, { action: "lesson.update", subjectType: "lesson", subjectId: lessonId, summary: `${label}${scope === "future" ? ", and later lessons in the series" : ""}` });
   } catch (e) {
-    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
+    if (e instanceof LessonError || e instanceof RoleError || e instanceof CategoryError) return { error: e.message };
     throw e;
   }
   if (studentId) revalidatePath(`/students/${studentId}`);
@@ -176,7 +176,7 @@ export async function issueMakeupAction(_p: ActionState, fd: FormData): Promise<
     revalidatePath(`/lessons/${lessonId}`);
     return { ok: `${n} make-up credit${n === 1 ? "" : "s"} put on the account` };
   } catch (e) {
-    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
+    if (e instanceof LessonError || e instanceof RoleError || e instanceof CategoryError) return { error: e.message };
     throw e;
   }
 }
@@ -189,7 +189,7 @@ export async function deleteLessonAction(lessonId: string, scope: "one" | "futur
     else await deleteLesson(prisma, lessonId);
     await auditAs(prisma, session, { action: "lesson.delete", subjectType: "lesson", subjectId: lessonId, summary: `${label}${scope === "future" ? " and later lessons in the series" : ""}` });
   } catch (e) {
-    if (e instanceof LessonError || e instanceof RoleError) return { error: e.message };
+    if (e instanceof LessonError || e instanceof RoleError || e instanceof CategoryError) return { error: e.message };
     throw e;
   }
   revalidatePath("/calendar");

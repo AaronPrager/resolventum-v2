@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
 import { requireSession, tutorScope } from "@/src/auth/current";
 import { sessionNotesForStudent } from "@/src/services/sessionNotes";
+import { listLessonCategories } from "@/src/services/lessonCategories";
 import { formatCents, formatDate, formatWhen, localDateStr } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { studentChoices, studentDetail } from "@/src/services/students";
@@ -28,6 +29,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const scope = tutorScope(session);
   if (scope && !student.lessons.some((l) => l.lesson.tutorId === scope)) notFound();
   const notes = await sessionNotesForStudent(prisma, student.id, 12);
+  const categories = await listLessonCategories(prisma, student.organization.id);
   const noted = new Set(notes.map((n) => n.lesson.id));
   const choices = await studentChoices(prisma, student.organizationId, [student.id]);
   const tz = student.organization.timezone;
@@ -112,13 +114,14 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
           action={createLessonAction}
           students={choices}
           tutors={tutors}
+          categories={categories.map((c) => ({ id: c.id, name: c.name }))}
           submitLabel="Add lesson"
           allowRepeat
           initial={{
             date: localDateStr(nextSlot, tz), time: "16:00", durationMin: 60,
             subject: student.defaultSubject ?? "",
             seats: [{ studentId: student.id, price: student.defaultPriceCents != null ? (student.defaultPriceCents / 100).toFixed(2) : "" }],
-            tutorId: tutors.length === 1 ? tutors[0].id : "", locationType: "IN_PERSON", meetingLink: "", notes: "", category: "",
+            tutorId: tutors.length === 1 ? tutors[0].id : "", locationType: "IN_PERSON", meetingLink: "", notes: "", categoryId: "",
           }}
         />
         </div>

@@ -22,6 +22,9 @@ afterAll(async () => {
     await prisma.lesson.deleteMany({ where: { seriesId: id } });
     await prisma.lessonSeries.delete({ where: { id } }).catch(() => undefined);
   }
+  // Belt and braces: a charge whose lesson is already gone still names the test subject.
+  await prisma.charge.deleteMany({ where: { accountId, lessonStudentId: null, description: { contains: "holiday series test" } } });
+  await prisma.charge.deleteMany({ where: { accountId, lessonStudentId: null, description: { startsWith: "Not term-time test" } } });
   await prisma.holiday.deleteMany({ where: { id: { in: holidayIds } } });
   await rebuildAccountAllocations(prisma, accountId);
 });

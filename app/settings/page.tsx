@@ -7,12 +7,12 @@ import { Badge, Card, LinkButton, PageHeader } from "@/src/components/ui";
 import { CopyLink } from "./CopyLink";
 import { intakeAction } from "./actions";
 import { Button } from "@/src/components/ui";
-import { AlertsForm, HolidayForm, LogoForm, OrganizationForm, PolicyForm } from "./forms";
+import { AlertsForm, LogoForm, OrganizationForm, PolicyForm } from "./forms";
+import { CategoryList, HolidayList } from "./ListEditors";
+import { listLessonCategories } from "@/src/services/lessonCategories";
 import { listHolidays } from "@/src/services/holidays";
 import { EXPORT_KINDS } from "@/src/services/exportData";
 import { formatDate } from "@/src/lib/format";
-import { ConfirmForm } from "@/src/components/ConfirmForm";
-import { removeHolidayAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +20,10 @@ const ZONES = ["America/New_York", "America/Chicago", "America/Denver", "America
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const [org, holidays] = await Promise.all([
+  const [org, holidays, categories] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: session.organizationId } }),
     listHolidays(prisma, session.organizationId),
+    listLessonCategories(prisma, session.organizationId, { includeArchived: true }),
   ]);
   const owner = session.role === "OWNER";
   const h = await headers();
@@ -40,28 +41,14 @@ export default async function SettingsPage() {
       <Card title="Cancellation policy">
         <PolicyForm canEdit={owner} policy={{ lateCancelHours: org.lateCancelHours, lateCancelChargePercent: org.lateCancelChargePercent, noShowChargePercent: org.noShowChargePercent, makeupOnLateCancel: org.makeupOnLateCancel }} />
       </Card>
-      <Card title="School holidays">
-        <div className="space-y-4" data-testid="holidays-card">
-          <p className="text-sm text-muted">A weekly series marked &quot;term time only&quot; makes no lessons on these days.</p>
-          {holidays.length === 0 ? <p className="text-sm text-muted">None yet.</p> : (
-            <ul className="divide-y divide-line rounded-xl border border-line text-sm" data-testid="holidays">
-              {holidays.map((h) => (
-                <li key={h.id} className="flex flex-wrap items-center gap-3 px-4 py-2">
-                  <span className="font-medium">{h.name}</span>
-                  <span className="text-muted tabular-nums">{formatDate(h.startsOn)}{h.endsOn.getTime() !== h.startsOn.getTime() && ` to ${formatDate(h.endsOn)}`}</span>
-                  {owner && (
-                    <ConfirmForm action={removeHolidayAction} className="ml-auto" message={`Remove ${h.name}?`}>
-                      <input type="hidden" name="holidayId" value={h.id} />
-                      <Button variant="ghost" className="text-xs text-owed">Remove</Button>
-                    </ConfirmForm>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {owner && <HolidayForm />}
-        </div>
-      </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card title="Lesson categories" description="What a lesson is for, in your words. The lesson form picks from this list and the income report groups by it.">
+          <CategoryList canEdit={owner} categories={categories.map((c) => ({ id: c.id, name: c.name, lessons: c._count.lessons, archived: !!c.archivedAt }))} />
+        </Card>
+        <Card title="School holidays" description="A weekly series marked term time only makes no lessons on these days.">
+          <HolidayList canEdit={owner} holidays={holidays.map((h) => ({ id: h.id, name: h.name, from: formatDate(h.startsOn), to: h.endsOn.getTime() !== h.startsOn.getTime() ? formatDate(h.endsOn) : null }))} />
+        </Card>
+      </div>
       <Card title="Alerts and automatic emails">
         <AlertsForm canEdit={owner} lowBalanceAlert={org.lowBalanceAlertCents != null ? (org.lowBalanceAlertCents / 100).toFixed(2) : ""} sessionNotesAuto={org.sessionNotesAuto} />
         <p className="mt-3 text-xs text-muted">Lesson reminders and the daily schedule are on the <a href="/emails?tab=schedule" className="text-brand hover:underline">Emails</a> page. Each family can be opted out of reminders and notes on their account page.</p>

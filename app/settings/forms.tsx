@@ -1,9 +1,9 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Plus, X } from "lucide-react";
-import { Button, Checkbox, Field, FormError, FormOk, Input, Select, Textarea } from "@/src/components/ui";
-import { type ActionState, addHolidayAction, changePasswordAction, removeLogoAction, saveAgreementAction, saveAlertsAction, savePolicyAction, saveTutorAction, updateOrganizationAction, uploadLogoAction } from "./actions";
+import { Trash2 } from "lucide-react";
+import { AddRow, Button, Checkbox, Field, FormError, FormOk, IconButton, Input, Row, RowActions, Rows, Select, Textarea } from "@/src/components/ui";
+import { type ActionState, changePasswordAction, removeLogoAction, saveAgreementAction, saveAlertsAction, savePolicyAction, saveTutorAction, updateOrganizationAction, uploadLogoAction } from "./actions";
 import { FileInput } from "@/src/components/FileInput";
 
 export function OrganizationForm({ org, zones, canEdit }: { org: { name: string; timezone: string; legalName: string; address: string; phone: string; replyToEmail: string; venmoHandle: string; zelleHandle: string }; zones: string[]; canEdit: boolean }) {
@@ -48,18 +48,28 @@ export function TutorForm({ tutor, zones }: { tutor?: TutorValues; zones: string
         <Field label="Or pay percent" hint="Of the lesson price; wins over hourly"><Input type="text" inputMode="numeric" name="payPercent" defaultValue={tutor?.payPercent ?? ""} placeholder="50" /></Field>
         <Field label="Notes" className="col-span-full"><Input name="notes" defaultValue={tutor?.notes ?? ""} /></Field>
       </div>
-      <fieldset className="space-y-2 rounded-lg bg-surface-2 px-3 py-2">
+      <fieldset className="space-y-2">
         <legend className="text-[13px] font-medium text-fg/80">Pay by subject</legend>
-        <p className="text-xs text-muted">A different rule for one subject, matched on the lesson&apos;s subject. Leave empty to pay every subject the same.</p>
-        {rates.map((r, i) => (
-          <div key={i} className="grid grid-cols-[1fr_7rem_5rem_auto] items-center gap-2 sm:max-w-xl">
-            <Input name="rateSubject" aria-label={`Subject ${i + 1}`} value={r.subject} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, subject: e.target.value } : x)))} placeholder="SAT Math" />
-            <Input name="rateHourly" aria-label={`Pay per hour ${i + 1}`} inputMode="decimal" value={r.hourly} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, hourly: e.target.value } : x)))} placeholder="per hour" />
-            <Input name="ratePercent" aria-label={`Percent ${i + 1}`} inputMode="numeric" value={r.percent} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, percent: e.target.value } : x)))} placeholder="%" />
-            <button type="button" onClick={() => setRates((rows) => rows.filter((_, j) => j !== i))} className="inline-flex size-9 items-center justify-center rounded-lg text-faint hover:bg-surface-3 hover:text-fg" aria-label={`Remove rule ${i + 1}`}><X className="size-4" aria-hidden /></button>
-          </div>
-        ))}
-        <Button type="button" variant="ghost" onClick={() => setRates((rows) => [...rows, { subject: "", hourly: "", percent: "" }])}><Plus aria-hidden />Add a subject rule</Button>
+        <p className="text-xs text-muted">A different rule for one subject, matched on the lesson&apos;s subject. Fill in per hour or a percent; percent wins. Empty means every subject pays the same.</p>
+        {rates.length > 0 && (
+          <Rows className="sm:max-w-2xl">
+            {rates.map((r, i) => (
+              <Row key={i} className="hover:bg-surface">
+                <div className="grid flex-1 grid-cols-[minmax(0,1fr)_6.5rem_5rem] items-center gap-2">
+                  <Input name="rateSubject" aria-label={`Subject ${i + 1}`} value={r.subject} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, subject: e.target.value } : x)))} placeholder="SAT Math" className="h-8" />
+                  <Input name="rateHourly" aria-label={`Pay per hour ${i + 1}`} inputMode="decimal" value={r.hourly} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, hourly: e.target.value } : x)))} placeholder="per hour" className="h-8" />
+                  <Input name="ratePercent" aria-label={`Percent ${i + 1}`} inputMode="numeric" value={r.percent} onChange={(e) => setRates((rows) => rows.map((x, j) => (j === i ? { ...x, percent: e.target.value } : x)))} placeholder="%" className="h-8" />
+                </div>
+                <RowActions className="sm:opacity-100">
+                  <IconButton tone="danger" label={`Remove rule ${i + 1}`} onClick={() => setRates((rows) => rows.filter((_, j) => j !== i))}><Trash2 aria-hidden /></IconButton>
+                </RowActions>
+              </Row>
+            ))}
+          </Rows>
+        )}
+        <AddRow className="sm:max-w-2xl">
+          <Button type="button" variant="ghost" className="h-8" onClick={() => setRates((rows) => [...rows, { subject: "", hourly: "", percent: "" }])}>Add a subject rule</Button>
+        </AddRow>
       </fieldset>
       <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
       <Button type="submit" variant={tutor ? "secondary" : "primary"} disabled={pending}>{pending ? "Saving" : tutor ? "Save" : "Add tutor"}</Button>
@@ -84,22 +94,6 @@ export function PolicyForm({ policy, canEdit }: { policy: { lateCancelHours: num
   );
 }
 
-export function HolidayForm() {
-  const [state, action, pending] = useActionState(addHolidayAction, {} as ActionState);
-  const [key, setKey] = useState(0);
-  return (
-    <form key={key} action={async (fd) => { await action(fd); setKey((k) => k + 1); }} className="space-y-2" data-testid="holiday-form">
-      <div className="grid gap-2 sm:grid-cols-[1fr_10rem_10rem_auto] sm:items-end">
-        <Field label="Name"><Input name="name" placeholder="Winter break" required /></Field>
-        <Field label="From"><Input type="date" name="startsOn" required /></Field>
-        <Field label="To"><Input type="date" name="endsOn" /></Field>
-        <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Adding" : "Add"}</Button>
-      </div>
-      <p className="text-xs text-muted">Leave &quot;To&quot; empty for a one-day holiday.</p>
-      <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
-    </form>
-  );
-}
 
 export function AlertsForm({ lowBalanceAlert, sessionNotesAuto, canEdit }: { lowBalanceAlert: string; sessionNotesAuto: boolean; canEdit: boolean }) {
   const [state, action, pending] = useActionState(saveAlertsAction, {} as ActionState);
@@ -167,3 +161,5 @@ export function AgreementForm({ template, canEdit }: { template: string; canEdit
     </form>
   );
 }
+
+

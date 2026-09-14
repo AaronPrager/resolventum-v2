@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, Building2, CalendarDays, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, Building2, CalendarDays, ChevronDown, CreditCard, Ellipsis, FileSignature, FolderOpen, GraduationCap, HandCoins, History, Home, Mail, NotebookPen, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
 interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean; children?: Item[] }
@@ -12,7 +12,11 @@ interface Item { href: string; label: string; icon: LucideIcon; match: (p: strin
 const home: Item = { href: "/", label: "Home", icon: Home, match: (p) => p === "/" };
 const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar") || p.startsWith("/lessons") };
 const students: Item = { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") };
-const homework: Item = { href: "/homework", label: "Homework", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") || p.startsWith("/library") };
+const notes: Item = { href: "/notes", label: "Session notes", icon: NotebookPen, match: (p) => p.startsWith("/notes") };
+const homework: Item = { href: "/homework", label: "Homework", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") };
+const library: Item = { href: "/library", label: "Library", icon: FolderOpen, match: (p) => p.startsWith("/library") };
+/** What a tutor produces between lessons: the note for the family, the homework, and the files behind it. One group, so they sit together. */
+const teaching: Item = { href: "/notes", label: "Teaching", icon: BookOpenCheck, match: (p) => p.startsWith("/notes") || p.startsWith("/homework") || p.startsWith("/library"), children: [notes, homework, library] };
 const emails: Item = { href: "/emails", label: "Emails", icon: Mail, match: (p) => p.startsWith("/emails") };
 const leads: Item = { href: "/leads", label: "Leads", icon: UserPlus, match: (p) => p.startsWith("/leads") };
 const accounts: Item = { href: "/accounts", label: "Accounts", icon: Wallet, match: (p) => p.startsWith("/accounts") };
@@ -29,8 +33,8 @@ const office: Item = { href: "/settings", label: "Office", icon: Building2, matc
 
 /** What each role gets. A tutor sees their own calendar, students, homework, and pay; no money pages and no office. The profile opens from the person's name. */
 function menus(role: string) {
-  if (role === "TUTOR") return { teach: [calendar, students, homework, emails], money: [earnings], foot: [] as Item[], bar: [calendar, students, homework, earnings], more: [emails] };
-  return { teach: [home, calendar, students, leads, homework, emails], money: [accounts, payments, expenses, reports], foot: [office], bar: [home, calendar, students, accounts], more: [leads, homework, emails, payments, expenses, reports, office, ...office.children!] };
+  if (role === "TUTOR") return { teach: [calendar, students, teaching, emails], money: [earnings], foot: [] as Item[], bar: [calendar, students, notes, earnings], more: [homework, library, emails] };
+  return { teach: [home, calendar, students, leads, teaching, emails], money: [accounts, payments, expenses, reports], foot: [office], bar: [home, calendar, students, accounts], more: [leads, notes, homework, library, emails, payments, expenses, reports, office, ...office.children!] };
 }
 
 function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; collapsed?: boolean; sub?: boolean }) {
@@ -51,13 +55,50 @@ function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; co
   );
 }
 
-/** A menu entry and, when it has children, those entries indented under it. Folded, only the parent shows. */
+/** Which groups the person closed, kept in the browser. Opening a page inside a group opens it again. */
+function readClosed(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem("nav-closed") ?? "{}"); } catch { return {}; }
+}
+function writeClosed(v: Record<string, boolean>) {
+  try { localStorage.setItem("nav-closed", JSON.stringify(v)); } catch { /* private window, or storage off: the choice lasts the page */ }
+}
+
+/**
+ * A menu entry and, when it has children, those entries indented under it.
+ * The name goes to the page; the chevron folds the entries away. The fold is
+ * remembered per group, and a group opens itself when you are inside it.
+ * With the whole sidebar folded to icons, only the parent shows.
+ */
 function NavGroup({ it, path, collapsed }: { it: Item; path: string; collapsed?: boolean }) {
   const childActive = it.children?.some((c) => c.match(path)) ?? false;
+  const [closed, setClosed] = useState(false);
+  useEffect(() => { setClosed(!!readClosed()[it.href]); }, [it.href]);
+  useEffect(() => { if (childActive) setClosed(false); }, [childActive, path]);
+  if (!it.children) return <NavLink it={it} active={it.match(path)} collapsed={collapsed} />;
+  const open = !closed;
+  function toggle() {
+    const next = !closed;
+    setClosed(next);
+    writeClosed({ ...readClosed(), [it.href]: next });
+  }
   return (
     <>
-      <NavLink it={it} active={it.match(path) && !childActive} collapsed={collapsed} />
-      {!collapsed && it.children?.map((c) => <NavLink key={c.href} it={c} active={c.match(path)} sub />)}
+      <div className="relative">
+        <NavLink it={it} active={it.match(path) && !childActive} collapsed={collapsed} />
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-label={`${open ? "Fold" : "Unfold"} ${it.label}`}
+            title={open ? "Fold" : "Unfold"}
+            className="absolute right-1 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-faint hover:bg-surface-3 hover:text-fg"
+          >
+            <ChevronDown className={`size-4 transition-transform ${open ? "" : "-rotate-90"}`} strokeWidth={1.75} aria-hidden />
+          </button>
+        )}
+      </div>
+      {!collapsed && open && it.children.map((c) => <NavLink key={c.href} it={c} active={c.match(path)} sub />)}
     </>
   );
 }
@@ -68,7 +109,7 @@ export function SideNav({ role, collapsed }: { role: string; collapsed?: boolean
   const { teach, money, foot } = menus(role);
   return (
     <nav className="flex flex-1 flex-col gap-5" aria-label="Main">
-      <div className="flex flex-col gap-0.5">{teach.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}</div>
+      <div className="flex flex-col gap-0.5">{teach.map((it) => <NavGroup key={it.href} it={it} path={path} collapsed={collapsed} />)}</div>
       <div className="flex flex-col gap-0.5">
         {collapsed ? <div className="mx-2 mb-1 border-t border-line" aria-hidden /> : <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-faint">Money</div>}
         {money.map((it) => <NavLink key={it.href} it={it} active={it.match(path)} collapsed={collapsed} />)}
