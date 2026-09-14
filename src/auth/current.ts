@@ -7,9 +7,33 @@ import { redirect } from "next/navigation";
 import { prisma } from "../db";
 import { COOKIE_NAME, SESSION_DAYS, type SessionUser, sessionFromToken, signIn as coreSignIn, signOut as coreSignOut } from "./session";
 
+/**
+ * Development only: with DEV_AUTO_LOGIN set, a request with no cookie is
+ * treated as that person, so nobody types a password on localhost. "true"
+ * means the first owner; an email means that user. Never in production, and
+ * the browser tests clear the variable so they still exercise real sign-in.
+ */
+export function devAutoLogin(): string | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  const v = process.env.DEV_AUTO_LOGIN?.trim();
+  return v && v !== "false" && v !== "0" ? v : null;
+}
+
+async function devSession(): Promise<SessionUser | null> {
+  const who = devAutoLogin();
+  if (!who) return null;
+  const m = await prisma.membership.findFirst({
+    where: who.includes("@") ? { user: { email: who.toLowerCase(), deletedAt: null } } : { role: "OWNER", user: { deletedAt: null } },
+    include: { user: true, organization: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!m) return null;
+  return { userId: m.user.id, email: m.user.email, name: m.user.name, organizationId: m.organizationId, organizationName: m.organization.name, timezone: m.organization.timezone, role: m.role, tutorId: m.tutorId };
+}
+
 export async function currentSession(): Promise<SessionUser | null> {
   const jar = await cookies();
-  return sessionFromToken(prisma, jar.get(COOKIE_NAME)?.value);
+  return (await sessionFromToken(prisma, jar.get(COOKIE_NAME)?.value)) ?? devSession();
 }
 
 export async function requireSession(): Promise<SessionUser> {

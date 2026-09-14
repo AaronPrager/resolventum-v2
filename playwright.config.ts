@@ -8,7 +8,8 @@ export default defineConfig({
   fullyParallel: false,
   use: { baseURL: "http://localhost:3100" },
   webServer: {
-    command: "DISABLE_RATE_LIMIT=1 npm run dev",
+    // The tests sign in for real, so the dev auto sign-in is switched off for this server.
+    command: "DISABLE_RATE_LIMIT=1 DEV_AUTO_LOGIN= npm run dev",
     url: "http://localhost:3100/login",
     reuseExistingServer: true,
     timeout: 120_000,

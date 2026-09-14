@@ -4,7 +4,7 @@ import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { BottomNav, SideNav } from "./Nav";
 import { Logo } from "./Logo";
-import { currentSession } from "@/src/auth/current";
+import { currentSession, devAutoLogin } from "@/src/auth/current";
 import { logoutAction } from "./login/actions";
 import { Avatar } from "@/src/components/ui";
 import "./globals.css";
@@ -47,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Avatar name={who} />
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="truncate text-[13px] font-medium">{who}</div>
-                <div className="truncate text-xs text-muted">{session.role.toLowerCase()}</div>
+                <div className="truncate text-xs text-muted">{session.role.toLowerCase()}{devAutoLogin() && <span className="ml-1.5 rounded bg-warn-soft px-1 py-px text-[10px] font-medium text-warn" title="Signed in automatically because DEV_AUTO_LOGIN is set">dev</span>}</div>
               </div>
               <form action={logoutAction}>
                 <button aria-label="Sign out" title="Sign out" className="inline-flex size-8 items-center justify-center rounded-lg text-faint hover:bg-surface-3 hover:text-fg">
