@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { formatCents } from "@/src/lib/format";
+import { SortableTable } from "./SortableTable";
 
 function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -171,8 +172,9 @@ export function TableWrap({ children, className, ...props }: ComponentProps<"div
     </div>
   );
 }
+/** Every table sorts by any heading with text; see SortableTable. */
 export function Table({ className, ...props }: ComponentProps<"table">) {
-  return <table {...props} className={cx("w-full border-separate border-spacing-0 text-sm [&_tbody_tr:last-child>td]:border-b-0", className)} />;
+  return <SortableTable {...props} className={cx("w-full border-separate border-spacing-0 text-sm [&_tbody_tr:last-child>td]:border-b-0", className)} />;
 }
 export function Th({ className, right, ...props }: ComponentProps<"th"> & { right?: boolean }) {
   return (

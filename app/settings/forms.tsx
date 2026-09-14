@@ -92,9 +92,10 @@ export function HolidayForm() {
       <div className="grid gap-2 sm:grid-cols-[1fr_10rem_10rem_auto] sm:items-end">
         <Field label="Name"><Input name="name" placeholder="Winter break" required /></Field>
         <Field label="From"><Input type="date" name="startsOn" required /></Field>
-        <Field label="To" hint="Same day if empty"><Input type="date" name="endsOn" /></Field>
+        <Field label="To"><Input type="date" name="endsOn" /></Field>
         <Button type="submit" variant="secondary" disabled={pending}>{pending ? "Adding" : "Add"}</Button>
       </div>
+      <p className="text-xs text-muted">Leave &quot;To&quot; empty for a one-day holiday.</p>
       <FormError>{state.error}</FormError><FormOk>{state.ok}</FormOk>
     </form>
   );
