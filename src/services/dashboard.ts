@@ -11,6 +11,35 @@ import { payRun } from "./payroll";
 import { lessonsMissingNotes } from "./sessionNotes";
 import { leadCounts } from "./leads";
 import { archiveCandidates } from "./students";
+import { calendarLessons } from "./calendar";
+
+export interface MonthMoney { month: string; label: string; collectedCents: number; refundedCents: number; lessons: number; current: boolean }
+
+/** Money collected per month for the last `months` calendar months, oldest first, with lessons taught. */
+export async function moneyByMonth(db: PrismaClient, organizationId: string, timeZone: string, now = new Date(), months = 6): Promise<MonthMoney[]> {
+  const today = localDateStr(now, timeZone);
+  const [y, m] = today.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - months, 1));
+  const [paid, taught] = await Promise.all([
+    db.$queryRaw<{ m: string; paid: bigint; refunded: bigint }[]>`
+      select to_char("paidOn", 'YYYY-MM') m,
+        coalesce(sum(case when "amountCents" > 0 then "amountCents" else 0 end), 0)::bigint paid,
+        coalesce(sum(case when "amountCents" < 0 then -"amountCents" else 0 end), 0)::bigint refunded
+      from "Payment" where "organizationId" = ${organizationId} and "voidedAt" is null and "paidOn" >= ${first} group by 1`,
+    db.$queryRaw<{ m: string; n: bigint }[]>`
+      select to_char("chargedOn", 'YYYY-MM') m, count(*)::bigint n
+      from "Charge" where "organizationId" = ${organizationId} and "voidedAt" is null and kind = 'LESSON' and "chargedOn" >= ${first} group by 1`,
+  ]);
+  const out: MonthMoney[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const p = paid.find((r) => r.m === key);
+    const t = taught.find((r) => r.m === key);
+    out.push({ month: key, label: new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(d), collectedCents: Number(p?.paid ?? 0), refundedCents: Number(p?.refunded ?? 0), lessons: Number(t?.n ?? 0), current: key === today.slice(0, 7) });
+  }
+  return out;
+}
 
 function addDays(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -34,7 +63,7 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
   const monthEnd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
   const asOf = new Date(`${today}T00:00:00Z`);
 
-  const [weekLessons, monthPayments, monthCharges, balances, pay, missing, leads, students, slipping, org, dormant] = await Promise.all([
+  const [weekLessons, monthPayments, monthCharges, balances, pay, missing, leads, students, slipping, org, dormant, todayLessons, months] = await Promise.all([
     db.lesson.findMany({
       where: { organizationId, deletedAt: null, allDay: false, startsAt: { gte: zonedToUtc(weekStart, "00:00", timeZone), lt: zonedToUtc(weekEnd, "00:00", timeZone) } },
       select: { status: true, durationMin: true, students: { select: { priceCents: true } } },
@@ -54,6 +83,8 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
       group by a.id, a.name having count(*) >= 2 order by missed desc limit 10`,
     db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { lowBalanceAlertCents: true } }),
     archiveCandidates(db, organizationId, now),
+    calendarLessons(db, organizationId, zonedToUtc(today, "00:00", timeZone), zonedToUtc(addDays(today, 1), "00:00", timeZone), timeZone),
+    moneyByMonth(db, organizationId, timeZone, now, 6),
   ]);
 
   const live = weekLessons.filter((l) => l.status !== "CANCELLED");
@@ -91,5 +122,9 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
     students: { active: count("ACTIVE"), paused: count("PAUSED"), graduated: count("GRADUATED") },
     /** Active students with no lesson in 60 days and nothing booked: pause, graduate, or archive them. */
     dormant,
+    /** Today's lessons in the school's zone, cancelled ones included and flagged. */
+    todayLessons,
+    /** Money collected per month, last six months, for the chart. */
+    months,
   };
 }

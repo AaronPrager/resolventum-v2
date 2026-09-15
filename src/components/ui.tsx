@@ -175,7 +175,7 @@ export function Card({ title, description, children, className, actions }: { tit
   );
 }
 
-export function Stat({ label, value, tone, icon, wash, ...props }: { label: ReactNode; value: ReactNode; tone?: "owed" | "credit" | "muted"; icon?: ReactNode; /** A light wash from the top-left, tinted by the tone. The dashboard uses it. */ wash?: boolean } & ComponentProps<"div">) {
+export function Stat({ label, value, tone, icon, note, wash, ...props }: { label: ReactNode; value: ReactNode; tone?: "owed" | "credit" | "muted"; icon?: ReactNode; /** A short line under the number: "16 families", "after tutor pay". */ note?: ReactNode; /** A light wash from the top-left, tinted by the tone. The dashboard uses it. */ wash?: boolean } & ComponentProps<"div">) {
   return (
     <div
       {...props}
@@ -196,6 +196,7 @@ export function Stat({ label, value, tone, icon, wash, ...props }: { label: Reac
       >
         {value}
       </div>
+      {note && <div className="mt-0.5 truncate text-xs text-muted">{note}</div>}
     </div>
   );
 }
