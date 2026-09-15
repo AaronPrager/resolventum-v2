@@ -32,7 +32,7 @@ export default async function NewNotePage({ searchParams }: { searchParams: Prom
       <PageHeader title="New note" back={{ href: returnTo, label: "Back" }} subtitle="What was covered, a win, a struggle, homework, and the next goal. About one lesson, or general." />
       <Card>
         <NoteForm
-          students={students.map((x) => ({ id: x.id, name: x.name, first: x.name.split(", ")[1] ?? x.name }))}
+          students={students.map((x) => { const [last, first] = x.name.split(", "); return { id: x.id, name: first ? `${first} ${last}` : x.name, first: first ?? x.name }; }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))}
           lessonsByStudent={lessonsByStudent}
           defaults={{ studentId, lessonId }}
           today={localDateStr(new Date(), s.timezone)}

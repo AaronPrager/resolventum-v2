@@ -14,7 +14,7 @@ export default async function NewAssignmentPage({ searchParams }: { searchParams
   const s = await requireSession();
   const returnTo = q.returnTo && q.returnTo.startsWith("/") && !q.returnTo.startsWith("//") ? q.returnTo : "/homework";
   const [students, library, lessonsByStudent] = await Promise.all([
-    prisma.student.findMany({ where: { organizationId: s.organizationId, deletedAt: null, archivedAt: null, OR: [{ status: "ACTIVE" }, { id: q.student ?? "" }] }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }], select: { id: true, firstName: true, lastName: true } }),
+    prisma.student.findMany({ where: { organizationId: s.organizationId, deletedAt: null, archivedAt: null, OR: [{ status: "ACTIVE" }, { id: q.student ?? "" }] }, orderBy: [{ firstName: "asc" }, { lastName: "asc" }], select: { id: true, firstName: true, lastName: true } }),
     listLibrary(prisma, s.organizationId),
     recentLessonChoices(prisma, s.organizationId, { timeZone: s.timezone, tutorId: tutorScope(s) }),
   ]);
@@ -25,7 +25,7 @@ export default async function NewAssignmentPage({ searchParams }: { searchParams
       <PageHeader title="New assignment" back={{ href: returnTo, label: "Back" }} subtitle="A title, a due date, and files from the library. The student uploads their work through a link you send from the assignment page." />
       <Card>
         <NewAssignmentForm
-          students={students.map((st) => ({ id: st.id, name: `${st.lastName}, ${st.firstName}` }))}
+          students={students.map((st) => ({ id: st.id, name: `${st.firstName} ${st.lastName}` }))}
           lessonsByStudent={Object.fromEntries(Object.entries(lessonsByStudent).map(([k, v]) => [k, v.map((l) => ({ id: l.id, label: l.label }))]))}
           library={library.map((l) => ({ id: l.fileId, name: l.name, folder: l.folder }))}
           defaultStudentId={studentId}

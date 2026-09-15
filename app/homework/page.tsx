@@ -5,7 +5,7 @@ import { formatDate } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { listAssignments, type EffectiveStatus } from "@/src/services/homework";
 import { Badge, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
-import { StudentFilter } from "./StudentFilter";
+import { StudentFilter } from "@/src/components/StudentFilter";
 import { toggleArchiveAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
   const filter = (["OPEN", "PENDING", "ASSIGNED", "SOLVED", "REVIEWED", "OVERDUE"] as const).includes(q.status as never) ? (q.status as EffectiveStatus | "OPEN") : "OPEN";
   const [rows, students] = await Promise.all([
     listAssignments(prisma, s.organizationId, { today, status: archived ? undefined : filter, studentId: q.student, archived }),
-    prisma.student.findMany({ where: { organizationId: s.organizationId, deletedAt: null, OR: [{ archivedAt: null }, { id: q.student ?? "" }] }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }], select: { id: true, firstName: true, lastName: true } }),
+    prisma.student.findMany({ where: { organizationId: s.organizationId, deletedAt: null, OR: [{ archivedAt: null }, { id: q.student ?? "" }] }, orderBy: [{ firstName: "asc" }, { lastName: "asc" }], select: { id: true, firstName: true, lastName: true } }),
   ]);
   const tabs: [string, string][] = [["OPEN", "Open"], ["SOLVED", "To review"], ["OVERDUE", "Overdue"], ["ASSIGNED", "Assigned"], ["PENDING", "Not sent"], ["REVIEWED", "Reviewed"], ["ARCHIVED", "Archived"]];
   const current = archived ? "ARCHIVED" : filter;
@@ -60,7 +60,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
             <Link key={v} href={`/homework?status=${v}${q.student ? `&student=${q.student}` : ""}`} aria-current={current === v ? "page" : undefined} className={`rounded-lg px-3 py-1.5 ${current === v ? "bg-surface font-medium text-fg shadow-xs ring-1 ring-line" : "text-muted hover:bg-surface-3 hover:text-fg"}`}>{label}</Link>
           ))}
         </nav>
-        <StudentFilter students={students.map((st) => ({ id: st.id, name: `${st.lastName}, ${st.firstName}` }))} selected={q.student && students.some((st) => st.id === q.student) ? q.student : ""} status={current} />
+        <StudentFilter students={students.map((st) => ({ id: st.id, name: `${st.firstName} ${st.lastName}` }))} selected={q.student && students.some((st) => st.id === q.student) ? q.student : ""} href={`/homework?status=${current}`} />
       </div>
       <Card>
         {rows.length === 0 ? <Empty>{archived ? "Nothing archived." : "Nothing here."}</Empty> : table}

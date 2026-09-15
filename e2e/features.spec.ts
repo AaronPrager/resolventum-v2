@@ -34,7 +34,7 @@ test("homework: library upload, assignment, student upload through the public li
   await page.goto("/homework");
   await page.getByText("New assignment", { exact: true }).click();
   const form = page.getByTestId("assignment-form");
-  await form.getByLabel("Student").selectOption({ label: "Urman, Estella" });
+  await form.getByLabel("Student").selectOption({ label: "Estella Urman" });
   await form.getByLabel("Title").fill(`${TAG} worksheet`);
   await form.getByLabel("Due").fill("2027-02-01");
   await form.getByLabel(/Attach from the library/).selectOption({ label: "E2E / e2e-worksheet.pdf" });
