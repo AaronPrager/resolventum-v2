@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/src/db";
 import { requireSession } from "@/src/auth/current";
 import { aiConfigured } from "@/src/ai/generate";
-import { emailConfigured } from "@/src/email/send";
+import { emailConfigured, emailProvider, emailRedirect } from "@/src/email/send";
 import { Badge, Card, LinkButton, PageHeader } from "@/src/components/ui";
 import { CopyLink } from "./CopyLink";
 import { intakeAction } from "./actions";
@@ -81,10 +81,10 @@ export default async function SettingsPage() {
       </Card>
       <Card title="Server features">
         <div className="flex flex-wrap gap-3 text-sm">
-          <span>Email <Badge tone={emailConfigured() ? "credit" : "warn"}>{emailConfigured() ? "on" : "off"}</Badge></span>
+          <span>Email <Badge tone={emailConfigured() ? "credit" : "warn"}>{emailProvider() === "smtp" ? "on, your mailbox" : emailProvider() === "resend" ? "on, Resend" : "off"}</Badge>{emailConfigured() && emailRedirect() && <span className="ml-2 text-xs text-warn">every email goes to {emailRedirect()}</span>}</span>
           <span>AI <Badge tone={aiConfigured() ? "credit" : "warn"}>{aiConfigured() ? "on" : "off"}</Badge></span>
         </div>
-        <p className="mt-2 text-xs text-muted">Email needs RESEND_API_KEY and EMAIL_FROM. AI needs GEMINI_API_KEY. Both are set on the server, not here.</p>
+        <p className="mt-2 text-xs text-muted">Email needs RESEND_API_KEY and EMAIL_FROM, or the SMTP_* settings for your own mailbox; EMAIL_REDIRECT_TO sends everything to one inbox for testing. AI needs GEMINI_API_KEY. All are set on the server, not here.</p>
       </Card>
     </div>
   );

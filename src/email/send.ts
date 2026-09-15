@@ -1,18 +1,25 @@
 /**
- * Outgoing email. One function, one provider (Resend), every send logged as
- * a Message row so the app can show what went to whom and when.
+ * Outgoing email. One function, two ways out, every send logged as a
+ * Message row so the app can show what went to whom and when.
  *
- * Configure with RESEND_API_KEY and EMAIL_FROM ("Resolventum <mail@yourdomain>").
- * Without them sends fail with a clear message and the Message row says so.
- * Tests replace the transport with setTransport().
+ * Resend: RESEND_API_KEY and EMAIL_FROM ("Resolventum <mail@yourdomain>").
+ * Your own mailbox over SMTP: SMTP_HOST, SMTP_USER, SMTP_PASS (an app-specific
+ * password for iCloud or Gmail), SMTP_PORT (587), SMTP_SECURE ("true" for 465),
+ * and EMAIL_FROM, which for iCloud must be that mailbox or one of its aliases.
+ * SMTP wins when both are set. Without either, sends fail with a clear message
+ * and the Message row says so.
+ * EMAIL_REDIRECT_TO sends every email to that one address instead of the
+ * real recipient, for a developer machine with real family data. Tests
+ * replace the transport with setTransport().
  */
 import { Resend } from "resend";
+import nodemailer, { type Transporter } from "nodemailer";
 import type { PrismaClient } from "../../generated/prisma/client";
 
 export class EmailError extends Error {}
 export class EmailNotConfiguredError extends EmailError {
   constructor() {
-    super("Email is not configured. Set RESEND_API_KEY and EMAIL_FROM on the server to turn it on.");
+    super("Email is not configured. Set RESEND_API_KEY and EMAIL_FROM, or the SMTP_* settings, on the server to turn it on.");
   }
 }
 
@@ -31,16 +38,52 @@ export type Transport = (mail: OutgoingEmail) => Promise<{ providerMessageId: st
 
 let override: Transport | null = null;
 let client: Resend | null = null;
+let smtp: Transporter | null = null;
 
 export function setTransport(t: Transport | null) {
   override = t;
 }
+/** Which way mail goes out: your own mailbox over SMTP, Resend, or nothing yet. */
+export function emailProvider(): "smtp" | "resend" | null {
+  const e = process.env;
+  if (e.SMTP_HOST && e.SMTP_USER && e.SMTP_PASS && e.EMAIL_FROM) return "smtp";
+  if (e.RESEND_API_KEY && e.EMAIL_FROM) return "resend";
+  return null;
+}
 export function emailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+  return emailProvider() !== null;
+}
+
+async function smtpTransport(mail: OutgoingEmail) {
+  const e = process.env;
+  const host = e.SMTP_HOST!;
+  const secure = e.SMTP_SECURE === "true";
+  smtp ??= nodemailer.createTransport({
+    host,
+    port: Number(e.SMTP_PORT || (secure ? 465 : 587)),
+    secure,
+    // iCloud and most others want STARTTLS on 587; never fall back to plain text.
+    requireTLS: !secure,
+    auth: { user: e.SMTP_USER!, pass: e.SMTP_PASS! },
+  });
+  const info = await smtp.sendMail({
+    from: e.EMAIL_FROM!,
+    to: mail.to,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html ?? textToHtml(mail.text),
+    replyTo: mail.replyTo ?? undefined,
+    attachments: mail.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
+  });
+  return { providerMessageId: info.messageId ?? null };
+}
+/** Where every email goes instead of its recipient, when set. Null in normal use. */
+export function emailRedirect(): string | null {
+  const to = process.env.EMAIL_REDIRECT_TO?.trim();
+  return to ? to : null;
 }
 
 async function resendTransport(mail: OutgoingEmail) {
-  if (!emailConfigured()) throw new EmailNotConfiguredError();
   client ??= new Resend(process.env.RESEND_API_KEY);
   const { data, error } = await client.emails.send({
     from: process.env.EMAIL_FROM!,
@@ -63,7 +106,13 @@ export async function sendEmail(db: PrismaClient, organizationId: string, kind: 
     data: { organizationId, kind, toEmail: to, subject: mail.subject, bodyText: mail.text, relatedType: related?.type ?? null, relatedId: related?.id ?? null, status: "QUEUED" },
   });
   try {
-    const r = await (override ?? resendTransport)({ ...mail, to });
+    // On a developer machine everything can go to one inbox; the subject says who it was for.
+    const redirect = emailRedirect();
+    const outgoing = redirect ? { ...mail, to: redirect, subject: `[for ${to}] ${mail.subject}` } : { ...mail, to };
+    const provider = emailProvider();
+    const send = override ?? (provider === "smtp" ? smtpTransport : provider === "resend" ? resendTransport : null);
+    if (!send) throw new EmailNotConfiguredError();
+    const r = await send(outgoing);
     await db.message.update({ where: { id: row.id }, data: { status: "SENT", sentAt: new Date(), providerMessageId: r.providerMessageId } });
     return row.id;
   } catch (e) {
