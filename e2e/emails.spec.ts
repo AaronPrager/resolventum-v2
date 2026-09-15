@@ -19,7 +19,8 @@ test("lesson reminders preview a family email, balance reminders list who owes, 
   await page.getByRole("link", { name: "Balance reminders" }).click();
   const balances = page.getByTestId("balance-reminders");
   await expect(balances).toContainText("Samuel Barbalat");
-  await expect(balances).toContainText("$900.00");
+  // His balance grows as lessons pass, so match the amount as a shape rather than a number.
+  await expect(balances.locator("li", { hasText: "Samuel Barbalat" })).toContainText(/\$[\d,]+\.\d{2}/);
 
   await page.getByRole("link", { name: "Daily schedule" }).click();
   const settings = page.getByTestId("email-settings");
