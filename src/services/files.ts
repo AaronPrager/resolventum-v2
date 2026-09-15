@@ -1,6 +1,6 @@
 /**
- * Stored files: the tutor's library, homework attachments, student
- * submissions, receipts. Bytes live in Postgres today; `storage` and
+ * Stored files: homework attachments, student submissions, receipts,
+ * photos, the logo. Bytes live in Postgres today; `storage` and
  * `storageKey` are there so a move to object storage is a backfill.
  */
 import { createHash } from "node:crypto";
@@ -35,37 +35,18 @@ export async function storeFile(db: PrismaClient, input: { organizationId: strin
   });
 }
 
-export async function addToLibrary(db: PrismaClient, fileId: string, folder?: string | null) {
-  return db.libraryItem.upsert({ where: { fileId }, update: { folder: folder ?? undefined }, create: { fileId, folder: folder ?? null } });
-}
+export interface UsedFile { id: string; name: string; sizeBytes: number; uses: number; lastUsedAt: Date }
 
-export interface LibraryRow {
-  fileId: string;
-  name: string;
-  mimeType: string;
-  sizeBytes: number;
-  folder: string | null;
-  createdAt: Date;
-  usedInAssignments: number;
-}
-
-export async function listLibrary(db: PrismaClient, organizationId: string): Promise<LibraryRow[]> {
-  const rows = await db.libraryItem.findMany({
-    where: { file: { organizationId } },
-    include: { file: { select: { id: true, name: true, mimeType: true, sizeBytes: true, createdAt: true, _count: { select: { assignmentFiles: true } } } } },
-    orderBy: { file: { name: "asc" } },
+/** Files attached to any assignment so far, most recently used first. What "used before" offers when setting homework. */
+export async function usedFiles(db: PrismaClient, organizationId: string, take = 200): Promise<UsedFile[]> {
+  const rows = await db.file.findMany({
+    where: { organizationId, assignmentFiles: { some: {} } },
+    select: { id: true, name: true, sizeBytes: true, _count: { select: { assignmentFiles: true } }, assignmentFiles: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } },
   });
-  return rows.map((r) => ({
-    fileId: r.file.id, name: r.file.name, mimeType: r.file.mimeType, sizeBytes: r.file.sizeBytes, folder: r.folder, createdAt: r.file.createdAt,
-    usedInAssignments: r.file._count.assignmentFiles,
-  }));
-}
-
-/** Remove from the library. The File row stays if any assignment still points at it. */
-export async function removeFromLibrary(db: PrismaClient, fileId: string) {
-  await db.libraryItem.deleteMany({ where: { fileId } });
-  const uses = await db.file.findUnique({ where: { id: fileId }, select: { _count: { select: { assignmentFiles: true, submissions: true, lessonFiles: true, expenseReceipts: true } } } });
-  if (uses && Object.values(uses._count).every((n) => n === 0)) await db.file.delete({ where: { id: fileId } });
+  return rows
+    .map((f) => ({ id: f.id, name: f.name, sizeBytes: f.sizeBytes, uses: f._count.assignmentFiles, lastUsedAt: f.assignmentFiles[0]?.createdAt ?? new Date(0) }))
+    .sort((x, y) => y.lastUsedAt.getTime() - x.lastUsedAt.getTime())
+    .slice(0, take);
 }
 
 /** Bytes for download, scoped to an organization. */

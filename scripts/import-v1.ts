@@ -347,11 +347,8 @@ async function main() {
     resourceToFile.set(r.id, fileId);
     resourceByName.set(r.originalName, fileId);
     resourceByName.set(fixName(r.originalName), fileId);
-    if (fileId === r.id) {
-      await prisma.libraryItem.create({ data: { fileId, createdAt: r.createdAt, updatedAt: r.updatedAt } });
-    }
   }
-  console.log(`library files: ${resources.length}`);
+  console.log(`resource files: ${resources.length}`);
 
   // 5. Lesson series.
   const lessons = await q<Record<string, any>>(

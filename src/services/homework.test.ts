@@ -2,7 +2,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../db";
 import { HomeworkError, assignmentByToken, assignmentDetail, createAssignment, deleteAssignment, effectiveStatus, giveFeedback, listAssignments, markAssigned, publicFile, regenerateUploadLink, submitWork } from "./homework";
-import { listLibrary, removeFromLibrary, storeFile, addToLibrary } from "./files";
+import { storeFile, usedFiles } from "./files";
 
 let orgId: string;
 let studentId: string;
@@ -34,11 +34,9 @@ describe("homework", () => {
     expect(effectiveStatus({ status: "PENDING", dueOn: null }, today)).toBe("PENDING");
   });
 
-  it("creates an assignment with a library file and a working public link, takes a submission, gives feedback", async () => {
+  it("creates an assignment with a file and a working public link, takes a submission, gives feedback", async () => {
     const lib = await storeFile(prisma, { organizationId: orgId, name: "worksheet.pdf", mimeType: "application/pdf", data: pdf() });
     files.push(lib.id);
-    await addToLibrary(prisma, lib.id, "Algebra");
-    expect((await listLibrary(prisma, orgId)).some((r) => r.fileId === lib.id && r.folder === "Algebra")).toBe(true);
 
     const { assignment, uploadPath } = await createAssignment(prisma, orgId, { studentId, title: "Worksheet 3", dueOn: "2027-01-15", fileIds: [lib.id] });
     made.push(assignment.id);
@@ -91,15 +89,19 @@ describe("homework", () => {
     await expect(submitWork(prisma, uploadPath.slice(3), [{ name: "a.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", data: pdf() }])).rejects.toThrow(/only PDF and photos/);
   });
 
-  it("removing a library file keeps it when an assignment uses it", async () => {
+  it("attaches and detaches files after the fact, and lists files used before", async () => {
     const lib = await storeFile(prisma, { organizationId: orgId, name: "keep.pdf", mimeType: "application/pdf", data: pdf() });
     files.push(lib.id);
-    await addToLibrary(prisma, lib.id);
-    const { assignment } = await createAssignment(prisma, orgId, { studentId, title: "Uses file", fileIds: [lib.id] });
+    const { attachFiles, detachFile } = await import("./homework");
+    const { assignment } = await createAssignment(prisma, orgId, { studentId, title: "Uses file" });
     made.push(assignment.id);
-    await removeFromLibrary(prisma, lib.id);
+    expect(await attachFiles(prisma, orgId, assignment.id, [lib.id])).toBe(1);
+    expect(await attachFiles(prisma, orgId, assignment.id, [lib.id])).toBe(0);
+    expect((await usedFiles(prisma, orgId)).find((f) => f.id === lib.id)?.uses).toBe(1);
+    await expect(attachFiles(prisma, "not-an-org", assignment.id, [lib.id])).rejects.toThrow(/not found/);
+    await detachFile(prisma, orgId, assignment.id, lib.id);
+    expect(await prisma.assignmentFile.count({ where: { assignmentId: assignment.id } })).toBe(0);
     expect(await prisma.file.findUnique({ where: { id: lib.id } })).not.toBeNull();
-    expect(await prisma.libraryItem.findUnique({ where: { fileId: lib.id } })).toBeNull();
   });
 });
 

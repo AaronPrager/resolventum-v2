@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, Building2, CalendarDays, ChevronDown, CreditCard, Ellipsis, FileSignature, FolderOpen, GraduationCap, HandCoins, History, Home, Mail, NotebookPen, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, Building2, CalendarDays, ChevronDown, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, NotebookPen, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
 interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean; children?: Item[] }
@@ -14,9 +14,8 @@ const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDay
 const students: Item = { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") };
 const notes: Item = { href: "/notes", label: "Session notes", icon: NotebookPen, match: (p) => p.startsWith("/notes") };
 const homework: Item = { href: "/homework", label: "Assignments", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") };
-const library: Item = { href: "/library", label: "Library", icon: FolderOpen, match: (p) => p.startsWith("/library") };
 /** What a tutor produces between lessons: the note for the family, the homework, and the files behind it. One group, so they sit together. */
-const teaching: Item = { href: "/notes", label: "Teaching", icon: BookOpenCheck, match: (p) => p.startsWith("/notes") || p.startsWith("/homework") || p.startsWith("/library"), children: [notes, homework, library] };
+const teaching: Item = { href: "/notes", label: "Teaching", icon: BookOpenCheck, match: (p) => p.startsWith("/notes") || p.startsWith("/homework"), children: [notes, homework] };
 const emails: Item = { href: "/emails", label: "Emails", icon: Mail, match: (p) => p.startsWith("/emails") };
 const leads: Item = { href: "/leads", label: "Leads", icon: UserPlus, match: (p) => p.startsWith("/leads") };
 const accounts: Item = { href: "/accounts", label: "Accounts", icon: Wallet, match: (p) => p.startsWith("/accounts") };
@@ -40,8 +39,8 @@ const money: Item = { href: "/accounts", label: "Money", icon: Wallet, match: (p
  * no office. The profile opens from the person's name.
  */
 function menus(role: string) {
-  if (role === "TUTOR") return { items: [calendar, students, teaching, emails, earnings], bar: [calendar, students, notes, earnings], more: [homework, library, emails] };
-  return { items: [home, calendar, students, leads, teaching, emails, money, office], bar: [home, calendar, students, accounts], more: [leads, notes, homework, library, emails, payments, expenses, reports, office, ...office.children!] };
+  if (role === "TUTOR") return { items: [calendar, students, teaching, emails, earnings], bar: [calendar, students, notes, earnings], more: [homework, emails] };
+  return { items: [home, calendar, students, leads, teaching, emails, money, office], bar: [home, calendar, students, accounts], more: [leads, notes, homework, emails, payments, expenses, reports, office, ...office.children!] };
 }
 
 function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; collapsed?: boolean; sub?: boolean }) {

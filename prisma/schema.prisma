@@ -739,7 +739,7 @@ enum FileStorage {
   BLOB
 }
 
-/// Every stored file: library, homework, submissions, receipts, photos, logo.
+/// Every stored file: homework, submissions, receipts, photos, logo.
 model File {
   id             String       @id @default(uuid())
   organizationId String
@@ -756,7 +756,6 @@ model File {
   uploadedById   String?
   createdAt      DateTime     @default(now())
 
-  libraryItem     LibraryItem?
   lessonFiles     LessonFile[]
   assignmentFiles AssignmentFile[]
   submissions     Submission[]
@@ -767,17 +766,6 @@ model File {
 
   @@unique([organizationId, sha256, name])
   @@index([organizationId, createdAt])
-}
-
-/// A file the tutor keeps in their library (the Resources page).
-model LibraryItem {
-  id        String   @id @default(uuid())
-  fileId    String   @unique
-  file      File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  folder    String?
-  tags      String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 // ---------------------------------------------------------------- messaging

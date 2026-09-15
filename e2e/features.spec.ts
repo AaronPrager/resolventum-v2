@@ -16,28 +16,20 @@ test.afterAll(async () => {
     await prisma.file.deleteMany({ where: { id: { in: subs.map((s) => s.fileId).filter((x): x is string => !!x) } } });
     await prisma.assignment.delete({ where: { id: a.id } });
   }
-  await prisma.libraryItem.deleteMany({ where: { file: { name: { contains: "e2e-worksheet" } } } });
   await prisma.file.deleteMany({ where: { name: { contains: "e2e-worksheet" } } });
   await prisma.expense.deleteMany({ where: { description: { contains: TAG } } });
   await prisma.vendor.deleteMany({ where: { name: { contains: "E2E Vendor" } } });
   await prisma.$disconnect();
 });
 
-test("homework: library upload, assignment, student upload through the public link, feedback", async ({ page, browser }) => {
-  await page.goto("/library");
-  await page.getByLabel("Files").setInputFiles({ name: "e2e-worksheet.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 e2e") });
-  await page.getByLabel("Folder").fill("E2E");
-  await page.getByRole("button", { name: "Upload" }).click();
-  await expect(page.getByTestId("upload-form").getByRole("status")).toHaveText("1 file added");
-  await expect(page.getByTestId("library")).toContainText("e2e-worksheet.pdf");
-
+test("homework: assignment with a file from the computer, student upload through the public link, feedback", async ({ page, browser }) => {
   await page.goto("/homework");
   await page.getByText("New assignment", { exact: true }).click();
   const form = page.getByTestId("assignment-form");
   await form.getByLabel("Student").selectOption({ label: "Estella Urman" });
   await form.getByLabel("Title").fill(`${TAG} worksheet`);
   await form.getByLabel("Due").fill("2027-02-01");
-  await form.getByLabel(/Attach from the library/).selectOption({ label: "E2E / e2e-worksheet.pdf" });
+  await form.getByLabel(/Files from your computer/).setInputFiles({ name: "e2e-worksheet.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 e2e") });
   await form.getByRole("button", { name: "Create assignment" }).click();
   await expect(page.getByRole("heading", { name: `${TAG} worksheet` })).toBeVisible();
   await expect(page.getByText("pending", { exact: true })).toBeVisible();

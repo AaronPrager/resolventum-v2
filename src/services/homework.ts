@@ -61,6 +61,26 @@ export async function createAssignment(db: PrismaClient, organizationId: string,
 }
 
 /** A fresh upload link (old one stops working). */
+/** Add files to an assignment that already exists. Files already on it are skipped. */
+export async function attachFiles(db: PrismaClient, organizationId: string, assignmentId: string, fileIds: string[]) {
+  const a = await db.assignment.findFirst({ where: { id: assignmentId, organizationId }, select: { id: true, files: { select: { fileId: true } } } });
+  if (!a) throw new HomeworkError("Assignment not found");
+  const have = new Set(a.files.map((f) => f.fileId));
+  const ids = [...new Set(fileIds)].filter((id) => !have.has(id));
+  if (ids.length === 0) return 0;
+  const n = await db.file.count({ where: { id: { in: ids }, organizationId } });
+  if (n !== ids.length) throw new HomeworkError("One of the files does not belong to this organization");
+  await db.assignmentFile.createMany({ data: ids.map((fileId) => ({ assignmentId, fileId })) });
+  return ids.length;
+}
+
+/** Take a file off an assignment. The stored file stays for the others that use it. */
+export async function detachFile(db: PrismaClient, organizationId: string, assignmentId: string, fileId: string) {
+  const a = await db.assignment.findFirst({ where: { id: assignmentId, organizationId }, select: { id: true } });
+  if (!a) throw new HomeworkError("Assignment not found");
+  await db.assignmentFile.deleteMany({ where: { assignmentId, fileId } });
+}
+
 export async function regenerateUploadLink(db: PrismaClient, organizationId: string, assignmentId: string): Promise<string> {
   const a = await db.assignment.findFirst({ where: { id: assignmentId, organizationId } });
   if (!a) throw new HomeworkError("Assignment not found");

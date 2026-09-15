@@ -8,8 +8,8 @@ import { EmailError, sendEmail } from "@/src/email/send";
 import { homeworkLinkEmail } from "@/src/email/templates";
 import { AiError, aiConfigured } from "@/src/ai/generate";
 import { approveFeedback, discardDraft, draftFeedback } from "@/src/ai/drafts";
-import { FileError, addToLibrary, removeFromLibrary, storeFile } from "@/src/services/files";
-import { HomeworkError, archiveAssignments, createAssignment, deleteAssignment, giveFeedback, markAssigned, regenerateUploadLink, unarchiveAssignment, updateAssignment } from "@/src/services/homework";
+import { FileError, storeFile } from "@/src/services/files";
+import { HomeworkError, archiveAssignments, attachFiles, createAssignment, deleteAssignment, detachFile, giveFeedback, markAssigned, regenerateUploadLink, unarchiveAssignment, updateAssignment } from "@/src/services/homework";
 
 export interface ActionState { error?: string; ok?: string; link?: string }
 
@@ -19,14 +19,44 @@ function friendly(e: unknown): ActionState {
   throw e;
 }
 
+/** Files picked from the computer in a form: stored, and their ids returned. */
+async function storeUploads(fd: FormData, organizationId: string, userId: string): Promise<string[]> {
+  const files = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const ids: string[] = [];
+  for (const f of files) ids.push((await storeFile(prisma, { organizationId, name: f.name, mimeType: f.type, data: new Uint8Array(await f.arrayBuffer()), uploadedById: userId })).id);
+  return ids;
+}
+
+/** Add files to an assignment from the computer or from ones used before. */
+export async function attachFilesAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  let s;
+  try { s = await requireWriter(); } catch (e) { if (e instanceof RoleError) return { error: e.message }; throw e; }
+  const id = str(fd, "assignmentId");
+  try {
+    const fileIds = [...fd.getAll("fileIds").map(String).filter(Boolean), ...(await storeUploads(fd, s.organizationId, s.userId))];
+    if (fileIds.length === 0) return { error: "Pick a file first" };
+    const n = await attachFiles(prisma, s.organizationId, id, fileIds);
+    revalidatePath(`/homework/${id}`);
+    return { ok: n === 0 ? "Already attached" : `${n} file${n === 1 ? "" : "s"} attached` };
+  } catch (e) { return friendly(e); }
+}
+
+export async function detachFileAction(fd: FormData): Promise<void> {
+  const s = await requireWriter();
+  const id = str(fd, "assignmentId");
+  await detachFile(prisma, s.organizationId, id, str(fd, "fileId"));
+  revalidatePath(`/homework/${id}`);
+}
+
 export async function createAssignmentAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   let s;
   try { s = await requireWriter(); } catch (e) { if (e instanceof RoleError) return { error: e.message }; throw e; }
   let id: string;
   try {
+    const fileIds = [...fd.getAll("fileIds").map(String).filter(Boolean), ...(await storeUploads(fd, s.organizationId, s.userId))];
     const { assignment } = await createAssignment(prisma, s.organizationId, {
       studentId: str(fd, "studentId"), lessonId: str(fd, "lessonId") || null, title: str(fd, "title"), description: str(fd, "description") || null, dueOn: str(fd, "dueOn") || null,
-      fileIds: fd.getAll("fileIds").map(String).filter(Boolean),
+      fileIds,
     }, s.userId);
     id = assignment.id;
   } catch (e) { return friendly(e); }
@@ -126,29 +156,6 @@ export async function emailLinkAction(_p: ActionState, fd: FormData): Promise<Ac
   } catch (e) { if (e instanceof EmailError) return { error: e.message }; return friendly(e); }
   revalidatePath(`/homework/${id}`);
   return { ok: `Sent to ${to}. Any earlier link stopped working.` };
-}
-
-export async function uploadLibraryAction(_p: ActionState, fd: FormData): Promise<ActionState> {
-  let s;
-  try { s = await requireWriter(); } catch (e) { if (e instanceof RoleError) return { error: e.message }; throw e; }
-  const files = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length === 0) return { error: "Choose at least one file" };
-  const folder = str(fd, "folder") || null;
-  try {
-    for (const f of files) {
-      const stored = await storeFile(prisma, { organizationId: s.organizationId, name: f.name, mimeType: f.type, data: new Uint8Array(await f.arrayBuffer()), uploadedById: s.userId });
-      await addToLibrary(prisma, stored.id, folder);
-    }
-  } catch (e) { return friendly(e); }
-  revalidatePath("/library");
-  return { ok: `${files.length} file${files.length === 1 ? "" : "s"} added` };
-}
-
-export async function removeLibraryAction(fd: FormData): Promise<void> {
-  const s = await requireWriter();
-  const f = await prisma.file.findFirst({ where: { id: str(fd, "fileId"), organizationId: s.organizationId } });
-  if (f) await removeFromLibrary(prisma, f.id);
-  revalidatePath("/library");
 }
 
 export async function toggleArchiveAction(fd: FormData): Promise<void> {

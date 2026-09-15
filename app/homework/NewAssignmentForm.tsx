@@ -2,18 +2,21 @@
 
 import { useActionState, useState } from "react";
 import { Button, Field, FormError, Input, LinkButton, Select, Textarea } from "@/src/components/ui";
+import { FileInput } from "@/src/components/FileInput";
+import { UsedBefore, type UsedFileOption } from "./UsedBefore";
 import { type ActionState, createAssignmentAction } from "./actions";
 
 export interface LessonOption { id: string; label: string }
 
 /**
  * The one form for setting homework, reached from the homework page or a
- * student's panel. It can follow one of the student's recent lessons.
+ * student's panel. It can follow one of the student's recent lessons, and
+ * takes files from the computer or ones used before.
  */
-export function NewAssignmentForm({ students, lessonsByStudent, library, defaultStudentId, defaultLessonId, returnTo }: {
+export function NewAssignmentForm({ students, lessonsByStudent, used, defaultStudentId, defaultLessonId, returnTo }: {
   students: { id: string; name: string }[];
   lessonsByStudent: Record<string, LessonOption[]>;
-  library: { id: string; name: string; folder: string | null }[];
+  used: UsedFileOption[];
   defaultStudentId?: string;
   defaultLessonId?: string;
   returnTo?: string;
@@ -31,13 +34,8 @@ export function NewAssignmentForm({ students, lessonsByStudent, library, default
         <Field label="Title" className="col-span-2"><Input name="title" required placeholder="Worksheet 3, problems 1 to 20" /></Field>
         <Field label="Due"><Input type="date" name="dueOn" /></Field>
         <Field label="Instructions" className="col-span-full"><Textarea name="description" rows={2} /></Field>
-        {library.length > 0 && (
-          <Field label="Attach from the library (hold Cmd to pick several)" className="col-span-full">
-            <Select name="fileIds" multiple size={Math.min(6, library.length)}>
-              {library.map((f) => <option key={f.id} value={f.id}>{f.folder ? `${f.folder} / ` : ""}{f.name}</option>)}
-            </Select>
-          </Field>
-        )}
+        <Field label="Files from your computer" className="col-span-full" hint="PDF, images, or Office files, up to 25 MB each."><FileInput name="files" multiple maxFiles={20} /></Field>
+        {used.length > 0 && <div className="col-span-full"><UsedBefore files={used} /></div>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={pending}>{pending ? "Saving" : "Create assignment"}</Button>

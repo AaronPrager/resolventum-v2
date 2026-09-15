@@ -8,11 +8,13 @@ import { formatDate, formatDay } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { assignmentDetail, effectiveStatus } from "@/src/services/homework";
 import { Badge, Button, Card, Empty, Field, Input, LinkButton, PageHeader, Textarea } from "@/src/components/ui";
-import { deleteAssignmentAction, discardDraftAction, markAssignedAction, toggleArchiveAction } from "../actions";
+import { deleteAssignmentAction, detachFileAction, discardDraftAction, markAssignedAction, toggleArchiveAction } from "../actions";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
 import { emailConfigured } from "@/src/email/send";
 import { EmailLink } from "./EmailLink";
 import { AssignmentEditor, DraftReview, FeedbackForm, LinkBox, AiButton } from "./parts";
+import { AttachFiles } from "./AttachFiles";
+import { usedFiles } from "@/src/services/files";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,8 @@ export default async function AssignmentPage({ params, searchParams }: { params:
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3100"}`;
   const parent = a.student.account.guardians[0];
   const ai = aiConfigured();
+  const canEdit = s.role !== "ACCOUNTANT";
+  const used = canEdit ? (await usedFiles(prisma, s.organizationId)).filter((f) => !a.files.some((x) => x.file.id === f.id)) : [];
 
   return (
     <div className="space-y-6">
@@ -55,11 +59,20 @@ export default async function AssignmentPage({ params, searchParams }: { params:
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Assignment">
           <AssignmentEditor assignmentId={a.id} title={a.title} description={a.description ?? ""} dueOn={a.dueOn ? a.dueOn.toISOString().slice(0, 10) : ""} />
-          {a.files.length > 0 && (
-            <ul className="mt-3 space-y-1 text-sm">
-              {a.files.map((f) => <li key={f.file.id}><a className="text-brand hover:underline" href={`/api/files/${f.file.id}`}>{f.file.name}</a> <span className="text-muted">{kb(f.file.sizeBytes)}</span></li>)}
-            </ul>
-          )}
+          <div className="mt-4 border-t border-line pt-3">
+            <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted">Files{a.files.length ? ` · ${a.files.length}` : ""}</h3>
+            {a.files.length === 0 ? <p className="text-sm text-muted">None attached.</p> : (
+              <ul className="space-y-1 text-sm" data-testid="assignment-files">
+                {a.files.map((f) => (
+                  <li key={f.file.id} className="flex flex-wrap items-center gap-2">
+                    <a className="text-brand hover:underline" href={`/api/files/${f.file.id}`}>{f.file.name}</a> <span className="text-muted">{kb(f.file.sizeBytes)}</span>
+                    {canEdit && <form action={detachFileAction}><input type="hidden" name="assignmentId" value={a.id} /><input type="hidden" name="fileId" value={f.file.id} /><Button variant="link" className="text-xs text-muted">Remove</Button></form>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canEdit && <div className="mt-3"><AttachFiles assignmentId={a.id} used={used.map((f) => ({ id: f.id, name: f.name, uses: f.uses }))} /></div>}
+          </div>
         </Card>
         <Card title="Student link">
           <p className="mb-3 text-sm text-muted">
