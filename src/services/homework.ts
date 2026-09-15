@@ -184,7 +184,7 @@ export async function listAssignments(db: PrismaClient, organizationId: string, 
   const rows = await db.assignment.findMany({
     where: { organizationId, archivedAt: opts.archived ? { not: null } : null, ...(opts.studentId ? { studentId: opts.studentId } : {}) },
     include: { student: { select: { firstName: true, lastName: true } }, _count: { select: { submissions: true } } },
-    orderBy: [{ dueOn: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }], // newest first
   });
   const out = rows.map((a) => ({
     id: a.id, title: a.title, studentId: a.studentId, studentName: `${a.student.firstName} ${a.student.lastName}`, dueOn: a.dueOn,

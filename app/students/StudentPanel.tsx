@@ -69,7 +69,7 @@ export async function StudentPanel({ id, session, all = false }: { id: string; s
 
       <div className="flex flex-wrap gap-2">
         {session.role !== "ACCOUNTANT" && <LinkButton href={`/lessons/new?student=${student.id}&returnTo=${back}`} variant="primary"><CalendarPlus aria-hidden />New lesson</LinkButton>}
-        {needNote[0] && <LinkButton href={`/notes/new?lesson=${needNote[0].lesson.id}&student=${student.id}&returnTo=${back}`} variant="secondary" title={`${needNote.length} lesson${needNote.length === 1 ? "" : "s"} from the last 30 days without a session note`}><NotebookPen aria-hidden />Write the note{needNote.length > 1 ? ` (${needNote.length} owed)` : ""}</LinkButton>}
+        {needNote[0] && <LinkButton href={`/notes/new?lesson=${needNote[0].lesson.id}&student=${student.id}&returnTo=${back}`} variant="secondary" title={`${needNote.length} lesson${needNote.length === 1 ? "" : "s"} from the last 30 days without a session note`}><NotebookPen aria-hidden />Write the note</LinkButton>}
         <LinkButton href={`/homework?student=${student.id}`} variant="secondary"><BookOpenCheck aria-hidden />Homework</LinkButton>
         {session.role !== "ACCOUNTANT" && <LinkButton href={`/students/${student.id}/edit`} variant="secondary"><Pencil aria-hidden />Edit</LinkButton>}
         {canWrite && <LinkButton href={`/students/${student.id}/update`} variant="secondary" title="Draft an update for the parents with AI"><Sparkles aria-hidden />Parent update</LinkButton>}
@@ -142,7 +142,7 @@ export async function StudentPanel({ id, session, all = false }: { id: string; s
                 <ul className="space-y-1 text-sm">
                   {student.assignments.slice(0, 4).map((a) => (
                     <li key={a.id} className="flex flex-wrap items-center gap-x-2">
-                      <Link href={`/homework/${a.id}?returnTo=${back}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{a.title}</Link>
+                      <Link href={`/homework/${a.id}?returnTo=${back}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{a.title || <span className="text-muted">Untitled</span>}</Link>
                       <Badge tone={a.status === "REVIEWED" ? "credit" : a.status === "OVERDUE" ? "owed" : a.status === "SOLVED" ? "brand" : "neutral"}>{a.status.toLowerCase()}</Badge>
                       <span className="text-xs text-muted tabular-nums">{a.dueOn ? `due ${formatDate(a.dueOn)}` : ""}{a._count.submissions > 0 ? ` · ${a._count.submissions} submitted` : ""}</span>
                     </li>

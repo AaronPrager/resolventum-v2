@@ -13,7 +13,7 @@ const home: Item = { href: "/", label: "Home", icon: Home, match: (p) => p === "
 const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar") || p.startsWith("/lessons") };
 const students: Item = { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") };
 const notes: Item = { href: "/notes", label: "Session notes", icon: NotebookPen, match: (p) => p.startsWith("/notes") };
-const homework: Item = { href: "/homework", label: "Homework", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") };
+const homework: Item = { href: "/homework", label: "Assignments", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") };
 const library: Item = { href: "/library", label: "Library", icon: FolderOpen, match: (p) => p.startsWith("/library") };
 /** What a tutor produces between lessons: the note for the family, the homework, and the files behind it. One group, so they sit together. */
 const teaching: Item = { href: "/notes", label: "Teaching", icon: BookOpenCheck, match: (p) => p.startsWith("/notes") || p.startsWith("/homework") || p.startsWith("/library"), children: [notes, homework, library] };
