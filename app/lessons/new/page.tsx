@@ -31,7 +31,7 @@ export default async function NewLessonPage({ searchParams }: { searchParams: Pr
           submitLabel="Add lesson"
           allowRepeat
           returnTo={q.returnTo ?? "/calendar"}
-          initial={{ date, time, durationMin: 60, subject: "", seats: [{ studentId: q.student && students.some((s) => s.id === q.student) ? q.student : "", price: students.find((s) => s.id === q.student)?.defaultPrice ?? "" }], tutorId: tutors.length === 1 ? tutors[0].id : "", locationType: "IN_PERSON", meetingLink: "", notes: "", categoryId: "" }}
+          initial={{ date, time, durationMin: 60, subject: students.find((s) => s.id === q.student)?.defaultSubject ?? "", seats: [{ studentId: q.student && students.some((s) => s.id === q.student) ? q.student : "", price: students.find((s) => s.id === q.student)?.defaultPrice ?? "" }], tutorId: tutors.length === 1 ? tutors[0].id : "", locationType: "IN_PERSON", meetingLink: "", notes: "", categoryId: "" }}
         />
       </Card>
     </div>

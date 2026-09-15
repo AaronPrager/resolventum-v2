@@ -37,7 +37,7 @@ export function Sidebar({ initialCollapsed, role, organizationName, who, dev, lo
       className={`hidden shrink-0 border-r border-line bg-surface-2 transition-[width] duration-200 md:sticky md:top-0 md:flex md:h-screen md:flex-col ${collapsed ? "w-16" : "w-60"}`}
     >
       <div className={collapsed ? "flex flex-col items-center gap-2 px-2 pb-3 pt-4" : "px-4 pb-4 pt-4"}>
-        <Link href="/" className="rounded-lg" title={collapsed ? "Home" : undefined}><Logo compact={collapsed} /></Link>
+        <a href="/welcome" className="rounded-lg" title="Resolventum front page"><Logo compact={collapsed} /></a>
         {!collapsed && (
           <div className="mt-3 truncate rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[13px] font-medium shadow-xs" title={organizationName}>{organizationName}</div>
         )}

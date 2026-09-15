@@ -1,30 +1,38 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { FileDown, Plus } from "lucide-react";
 import { prisma } from "@/src/db";
 import { requireSession, tutorScope } from "@/src/auth/current";
-import { formatDay } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { listStudents } from "@/src/services/students";
-import { Badge, Balance, Card, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
-import { FileDown } from "lucide-react";
+import { Empty, LinkButton, PageHeader } from "@/src/components/ui";
+import { StudentPanel } from "./StudentPanel";
+import { StudentPicker } from "./StudentPicker";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ archived?: string; status?: string }> }) {
+/**
+ * One page for working with students: pick one from the drop-down and the
+ * page shows their lessons, notes, homework, and contacts. ?s= is the pick.
+ */
+export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ archived?: string; status?: string; s?: string }> }) {
   const q = await searchParams;
   const includeArchived = q.archived === "1";
   const session = await requireSession();
-  const org = { id: session.organizationId, name: session.organizationName, timezone: session.timezone };
-  const all = await listStudents(prisma, org.id, localDateOnly(new Date(), session.timezone), { includeArchived, tutorId: tutorScope(session) });
+  const all = await listStudents(prisma, session.organizationId, localDateOnly(new Date(), session.organizationTimezone), { includeArchived, tutorId: tutorScope(session) });
   const status = q.status === "PAUSED" || q.status === "GRADUATED" || q.status === "ACTIVE" ? q.status : null;
-  const rows = status ? all.filter((r) => r.status === status) : all;
+  // The picker reads by first name; the list service sorts by last name for the tables elsewhere.
+  const rows = (status ? all.filter((r) => r.status === status) : all).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   const counts = { ACTIVE: all.filter((r) => r.status === "ACTIVE" && !r.archived).length, PAUSED: all.filter((r) => r.status === "PAUSED").length, GRADUATED: all.filter((r) => r.status === "GRADUATED").length };
   const mine = session.role === "TUTOR" && session.tutorId;
+  const money = session.role !== "TUTOR";
+  const selected = rows.find((r) => r.id === q.s)?.id ?? rows[0]?.id ?? null;
+  const keep = [includeArchived ? "archived=1" : "", status ? `status=${status}` : ""].filter(Boolean);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title={mine ? "My students" : "Students"}
-        subtitle={`${counts.ACTIVE} active${counts.PAUSED ? `, ${counts.PAUSED} paused` : ""}${counts.GRADUATED ? `, ${counts.GRADUATED} graduated` : ""}. Balance is the account's, so siblings share one.`}
+        subtitle={`${counts.ACTIVE} active${counts.PAUSED ? `, ${counts.PAUSED} paused` : ""}${counts.GRADUATED ? `, ${counts.GRADUATED} graduated` : ""}${money ? ". Balance is the account's, so siblings share one." : ""}`}
         actions={<>
           {(counts.PAUSED > 0 || counts.GRADUATED > 0 || status) && (
             <div className="inline-flex h-9 items-center gap-0.5 rounded-lg bg-surface-3 p-0.5" role="group" aria-label="Status">
@@ -38,25 +46,17 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
           {session.role !== "ACCOUNTANT" && <LinkButton href="/students/new" variant="primary"><Plus aria-hidden />Add student</LinkButton>}
         </>}
       />
-      <Card>
-        <TableWrap>
-          <Table data-testid="students">
-            <thead><tr><Th>Student</Th><Th className="hidden sm:table-cell">Grade</Th><Th className="hidden md:table-cell">Last lesson</Th><Th>Next lesson</Th><Th right className="hidden sm:table-cell">Lessons</Th><Th right>Balance</Th></tr></thead>
-            <tbody>
-              {rows.map((s) => (
-                <tr key={s.id} className={`hover:bg-surface-2 ${s.archived ? "text-muted" : ""}`}>
-                  <Td><Link href={`/students/${s.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{s.name}</Link>{s.status !== "ACTIVE" && <span className="ml-2"><Badge tone={s.status === "PAUSED" ? "warn" : "neutral"}>{s.status.toLowerCase()}</Badge></span>}{s.archived && <span className="ml-2"><Badge>archived</Badge></span>}</Td>
-                  <Td className="hidden sm:table-cell">{s.grade ?? ""}</Td>
-                  <Td className="hidden md:table-cell">{s.lastLessonAt ? formatDay(s.lastLessonAt, org.timezone) : ""}</Td>
-                  <Td>{s.nextLessonAt ? formatDay(s.nextLessonAt, org.timezone) : <span className="text-muted">none</span>}</Td>
-                  <Td right num className="hidden sm:table-cell">{s.lessonCount}</Td>
-                  <Td right num><Link href={`/accounts/${s.accountId}`} className="hover:underline"><Balance cents={s.balanceCents} /></Link></Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </TableWrap>
-      </Card>
+
+      {rows.length === 0 ? <Empty>No students here.</Empty> : (
+        <>
+          <StudentPicker
+            selected={selected}
+            keep={keep.join("&")}
+            students={rows.map((s) => ({ id: s.id, label: [s.name, s.status !== "ACTIVE" && `(${s.status.toLowerCase()})`, s.archived && "(archived)"].filter(Boolean).join(" ") }))}
+          />
+          {selected && <StudentPanel id={selected} session={session} />}
+        </>
+      )}
     </div>
   );
 }

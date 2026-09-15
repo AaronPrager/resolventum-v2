@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { LogOut } from "lucide-react";
 import { BottomNav } from "./Nav";
 import { Logo } from "./Logo";
@@ -26,7 +26,8 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await currentSession();
-  if (!session) {
+  const bare = (await headers()).get("x-bare-page") === "1";
+  if (!session || bare) {
     return (
       <html lang="en" className={inter.variable}>
         <body className="min-h-screen">{children}</body>
@@ -42,7 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Sidebar initialCollapsed={collapsed} role={session.role} organizationName={session.organizationName} who={who} dev={!!devAutoLogin()} logout={logoutAction} />
           <div className="min-w-0 flex-1">
             <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-surface/90 px-4 backdrop-blur md:hidden">
-              <Link href="/"><Logo /></Link>
+              <a href="/welcome" title="Resolventum front page"><Logo /></a>
               <div className="flex items-center gap-1">
                 <Link href="/profile" aria-label={`${who}, profile`} title="Open your profile" className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-surface-3"><Avatar name={who} /></Link>
                 <form action={logoutAction}>

@@ -1,9 +1,12 @@
-import Link from "next/link";
 import { ArrowRight, BarChart3, CalendarDays, FileDown, HandCoins, Landmark, NotebookPen, ScrollText, Shield, Sparkles, UserPlus } from "lucide-react";
 import { Logo } from "./Logo";
 import { REGISTRATION_CLOSED_MESSAGE } from "@/src/auth/registration";
 
 /**
+ * The front page. Plain links, not the router: the app frame is decided by
+ * the root layout on a full load, so moving between this page and the app
+ * must be a full load in both directions.
+ *
  * The signed-out front page. Dark, one accent, the same shape as the first
  * Resolventum's: a header, a hero with a preview card, six highlights, a
  * closing band, and a footer. Copy describes what the app does today.
@@ -19,8 +22,8 @@ const highlights = [
   { icon: UserPlus, title: "From inquiry to enrolled", description: "A sign-up link for your website, a pipeline for consults and trials, and one click to make the student and the family account." },
 ];
 
-export function Landing({ signupOpen }: { signupOpen: boolean }) {
-  const primary = signupOpen ? { href: "/signup", label: "Create your account" } : { href: "/login", label: "Sign in" };
+export function Landing({ signupOpen, signedIn = false }: { signupOpen: boolean; /** Already in the app: the buttons lead back to it instead of to sign-in. */ signedIn?: boolean }) {
+  const primary = signedIn ? { href: "/", label: "Open the app" } : signupOpen ? { href: "/signup", label: "Create your account" } : { href: "/login", label: "Sign in" };
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
@@ -32,13 +35,13 @@ export function Landing({ signupOpen }: { signupOpen: boolean }) {
 
       <header className="relative z-10 border-b border-white/10 bg-slate-950/70 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="inline-flex items-center rounded-lg text-white [&_span:last-child]:text-white"><Logo /></Link>
+          <a href="/" className="inline-flex items-center rounded-lg text-white [&_span:last-child]:text-white"><Logo /></a>
           <nav className="flex items-center gap-2 sm:gap-3" aria-label="Account">
-            <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 hover:text-white">Log in</Link>
-            {signupOpen && (
-              <Link href="/signup" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100">
+            <a href={signedIn ? "/" : "/login"} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 hover:text-white">{signedIn ? "Open the app" : "Log in"}</a>
+            {signupOpen && !signedIn && (
+              <a href="/signup" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100">
                 Get started<ArrowRight className="size-4" aria-hidden />
-              </Link>
+              </a>
             )}
           </nav>
         </div>
@@ -57,12 +60,12 @@ export function Landing({ signupOpen }: { signupOpen: boolean }) {
                 Resolventum keeps the calendar, the students, the session notes, the money, and tutor pay in one place, so they agree with each other. Less admin, more time for the lessons.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Link href={primary.href} className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/50 transition hover:bg-indigo-400">
+                <a href={primary.href} className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/50 transition hover:bg-indigo-400">
                   {primary.label}<ArrowRight className="size-4" aria-hidden />
-                </Link>
-                {signupOpen && <Link href="/login" className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">I already have an account</Link>}
+                </a>
+                {signupOpen && !signedIn && <a href="/login" className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">I already have an account</a>}
               </div>
-              {!signupOpen && <p className="mt-4 max-w-xl rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100" role="status">{REGISTRATION_CLOSED_MESSAGE}</p>}
+              {!signupOpen && !signedIn && <p className="mt-4 max-w-xl rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100" role="status">{REGISTRATION_CLOSED_MESSAGE}</p>}
               <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-slate-400">
                 <span className="inline-flex items-center gap-2"><Shield className="size-4 text-emerald-400/90" aria-hidden />Every charge and payment kept, never deleted</span>
                 <span className="inline-flex items-center gap-2"><ScrollText className="size-4 text-indigo-300/90" aria-hidden />Statements, invoices, and agreements as PDFs</span>
@@ -134,12 +137,12 @@ export function Landing({ signupOpen }: { signupOpen: boolean }) {
             </div>
             <div className="relative max-w-2xl">
               <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Ready to simplify your back office?</h2>
-              <p className="mt-3 text-indigo-100/95">{signupOpen ? "Free for one tutor. Type in your students and their balances, and the first lesson is ten minutes away. Nothing to import, nothing to migrate." : "We are currently not accepting new accounts. Schools already on Resolventum sign in below; everyone else can write to us and hear when sign-up opens."}</p>
+              <p className="mt-3 text-indigo-100/95">{signedIn ? "Your school is set up and waiting. Pick up where you left off." : signupOpen ? "Free for one tutor. Type in your students and their balances, and the first lesson is ten minutes away. Nothing to import, nothing to migrate." : "We are currently not accepting new accounts. Schools already on Resolventum sign in below; everyone else can write to us and hear when sign-up opens."}</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href={primary.href} className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-indigo-900 shadow-lg transition hover:bg-slate-100">
+                <a href={primary.href} className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-indigo-900 shadow-lg transition hover:bg-slate-100">
                   {primary.label}<ArrowRight className="size-4" aria-hidden />
-                </Link>
-                {signupOpen && <Link href="/login" className="inline-flex items-center rounded-xl border border-white/40 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15">Sign in</Link>}
+                </a>
+                {signupOpen && !signedIn && <a href="/login" className="inline-flex items-center rounded-xl border border-white/40 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15">Sign in</a>}
               </div>
             </div>
           </div>
