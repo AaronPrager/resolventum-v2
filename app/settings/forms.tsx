@@ -43,7 +43,7 @@ export function TutorForm({ tutor, zones, onDone }: { tutor?: TutorValues; zones
         <Field label="Name" className="col-span-2"><Input name="name" defaultValue={tutor?.name ?? ""} required /></Field>
         <Field label="Email"><Input type="email" name="email" defaultValue={tutor?.email ?? ""} /></Field>
         <Field label="Phone"><Input name="phone" defaultValue={tutor?.phone ?? ""} /></Field>
-        <Field label="Calendar color"><Input type="color" name="color" defaultValue={tutor?.color || "#4f46e5"} className="h-9 p-1" /></Field>
+        <Field label="Calendar color"><Input type="color" name="color" defaultValue={tutor?.color || "#0e5c48"} className="h-9 p-1" /></Field>
         <Field label="Timezone" hint="If not the school's"><Select name="timezone" defaultValue={tutor?.timezone ?? ""}><option value="">School&apos;s</option>{zones.map((z) => <option key={z} value={z}>{z}</option>)}</Select></Field>
         <Field label="Subjects" className="col-span-2 sm:col-span-3" hint="Comma separated"><Input name="subjects" defaultValue={tutor?.subjects ?? ""} placeholder="Algebra, SAT Math, Chemistry" /></Field>
         <Field label="Availability" className="col-span-2 sm:col-span-3" hint="Days and hours, like Mon-Thu 16:00-20:00, Sat 9:00-13:00. The lesson form warns when a time falls outside."><Input name="availability" defaultValue={tutor?.availability ?? ""} placeholder="Mon-Thu 16:00-20:00, Sat 9:00-13:00" /></Field>

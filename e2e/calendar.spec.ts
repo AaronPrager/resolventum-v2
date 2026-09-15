@@ -78,7 +78,8 @@ test("click selects an event, double-click opens it, Delete removes it after ask
 
   // Double-click opens.
   await chip.dblclick();
-  await expect(page.getByRole("heading", { name: "Edit event" })).toBeVisible();
+  await expect(page.getByTestId("lesson-overview")).toBeVisible(); // opens read-only
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await page.goBack();
 
   // Click selects; Delete asks; Keep it leaves it alone.

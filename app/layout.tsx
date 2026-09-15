@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { LogOut } from "lucide-react";
@@ -12,7 +12,10 @@ import { Avatar } from "@/src/components/ui";
 import { logoutAction } from "./login/actions";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-plex-sans", display: "swap" });
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-plex-mono", display: "swap" });
+const serif = Fraunces({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-fraunces", display: "swap" });
+const fonts = `${sans.variable} ${mono.variable} ${serif.variable}`;
 
 export const metadata: Metadata = {
   title: { default: "Resolventum", template: "%s · Resolventum" },
@@ -29,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const bare = (await headers()).get("x-bare-page") === "1";
   if (!session || bare) {
     return (
-      <html lang="en" className={inter.variable}>
+      <html lang="en" className={fonts}>
         <body className="min-h-screen">{children}</body>
       </html>
     );
@@ -37,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const who = session.name || session.email;
   const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={fonts}>
       <body className="min-h-screen">
         <div className="md:flex">
           <Sidebar initialCollapsed={collapsed} role={session.role} organizationName={session.organizationName} who={who} dev={!!devAutoLogin()} logout={logoutAction} />

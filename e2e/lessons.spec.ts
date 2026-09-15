@@ -36,6 +36,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await form.getByLabel("Price").fill("130");
   await form.getByLabel("Subject").fill(SUBJECT);
   await form.getByRole("button", { name: "Add lesson" }).click();
+  await expect(page).toHaveURL(new RegExp(`/students/${student.id}`)); // the save has landed before leaving the page
 
   // Back on her page; every lesson is in the fold, opened with all=1.
   await page.goto(`/students/${student.id}?all=1`);
@@ -56,6 +57,8 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   // Edit the price to 140.
   await page.goto(`/students/${student.id}?all=1`);
   await row.getByRole("link", { name: "Edit" }).click();
+  await expect(page.getByTestId("lesson-overview")).toBeVisible(); // opens read-only
+  await page.getByTestId("edit-lesson").click();
   await expect(page.getByRole("heading", { name: "Edit lesson" })).toBeVisible();
   await page.getByLabel("Price").fill("140");
   await page.getByTestId("lesson-form").getByRole("button", { name: "Save", exact: true }).click();
@@ -109,6 +112,8 @@ test("a group lesson: two students with their own prices, then one taken off", a
   expect(lesson.students.map((s) => [s.studentId, s.charge?.amountCents]).sort()).toEqual([[estella.id, 8000], [lina.id, 7000]].sort());
 
   await chip.dblclick();
+  await expect(page.getByTestId("lesson-overview")).toBeVisible();
+  await page.getByTestId("edit-lesson").click();
   await expect(page.getByRole("heading", { name: "Edit group lesson" })).toBeVisible();
   await page.getByTestId("lesson-form").getByRole("button", { name: "Remove Vernik, Lina" }).click();
   await page.getByTestId("lesson-form").getByRole("button", { name: "Save" }).click();

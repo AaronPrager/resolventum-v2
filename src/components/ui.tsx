@@ -150,7 +150,7 @@ export function PageHeader({ title, back, subtitle, actions }: { title: ReactNod
             {back.label}
           </Link>
         )}
-        <h1 className="text-[1.625rem] font-semibold leading-tight tracking-[-0.02em]">{title}</h1>
+        <h1 className="font-serif text-[1.75rem] font-semibold leading-tight tracking-[-0.015em]">{title}</h1>
         {subtitle && <div className="mt-1 text-sm text-muted">{subtitle}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -164,7 +164,7 @@ export function Card({ title, description, children, className, actions }: { tit
       {(title || actions) && (
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
+            {title && <h2 className="font-serif text-[1.05rem] font-semibold tracking-[-0.005em]">{title}</h2>}
             {description && <p className="mt-0.5 text-[13px] text-muted">{description}</p>}
           </div>
           {actions}
@@ -192,7 +192,7 @@ export function Stat({ label, value, tone, icon, note, wash, ...props }: { label
       </div>
       <div
         data-stat-value
-        className={cx("mt-1 truncate text-lg font-semibold tabular-nums tracking-[-0.02em] sm:text-2xl", tone === "owed" && "text-owed", tone === "credit" && "text-credit", tone === "muted" && "text-muted")}
+        className={cx("mt-1 truncate font-serif text-lg font-semibold tabular-nums tracking-[-0.015em] sm:text-2xl", tone === "owed" && "text-owed", tone === "credit" && "text-credit", tone === "muted" && "text-muted")}
       >
         {value}
       </div>
@@ -209,7 +209,7 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
     credit: "bg-credit-soft text-credit",
     warn: "bg-warn-soft text-warn",
   };
-  return <span className={cx("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium leading-4", tones[tone])}>{children}</span>;
+  return <span className={cx("inline-flex items-center rounded-[3px] px-1.5 py-0.5 font-mono text-[10.5px] font-medium uppercase leading-4 tracking-[0.08em]", tones[tone])}>{children}</span>;
 }
 
 export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -239,7 +239,7 @@ export function Th({ className, right, ...props }: ComponentProps<"th"> & { righ
   return (
     <th
       {...props}
-      className={cx("whitespace-nowrap border-b border-line pb-2 pr-4 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-muted last:pr-0", right && "text-right", className)}
+      className={cx("whitespace-nowrap border-b border-line pb-2 pr-4 text-left font-mono text-[11px] font-normal uppercase tracking-[0.09em] text-muted last:pr-0", right && "text-right", className)}
     />
   );
 }

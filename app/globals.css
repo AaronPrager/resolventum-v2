@@ -2,55 +2,55 @@
 
 /*
  * Palette as runtime variables so dark mode can swap them.
- * Warm neutrals, one indigo accent, and money colours that never double as the accent.
+ * Paper greys with a green accent, from the product plan. Money colours never double as the accent.
  */
 :root {
-  --bg: #f7f7f5;
+  --bg: #f3f5f2;
   --surface: #ffffff;
-  --surface-2: #f5f5f3;
-  --surface-3: #ecece9;
-  --fg: #1b1b18;
-  --muted: #6c6b66;
-  --faint: #9a9993;
-  --line: #e7e6e2;
-  --line-strong: #d6d5d0;
-  --brand: #4f46e5;
-  --brand-strong: #4338ca;
-  --brand-soft: #eef0fe;
+  --surface-2: #eff2ef;
+  --surface-3: #e4eae5;
+  --fg: #141d19;
+  --muted: #67766e;
+  --faint: #95a39b;
+  --line: #e4eae5;
+  --line-strong: #d6ddd7;
+  --brand: #0e5c48;
+  --brand-strong: #0a4a3a;
+  --brand-soft: #ddeae3;
   --brand-fg: #ffffff;
-  --owed: #c0362c;
-  --owed-soft: #fdeeec;
-  --credit: #15803d;
-  --credit-soft: #e8f6ec;
-  --warn: #b45309;
-  --warn-soft: #fef3e2;
-  --shadow-xs: 0 1px 2px rgb(24 24 20 / 0.05);
-  --shadow-sm: 0 1px 3px rgb(24 24 20 / 0.06), 0 1px 2px rgb(24 24 20 / 0.04);
-  --shadow-lg: 0 12px 32px rgb(24 24 20 / 0.12), 0 2px 6px rgb(24 24 20 / 0.06);
+  --owed: #b3402d;
+  --owed-soft: #f5e3df;
+  --credit: #2c5677;
+  --credit-soft: #dee7ef;
+  --warn: #8a4512;
+  --warn-soft: #f1e4d8;
+  --shadow-xs: 0 1px 2px rgb(20 29 25 / 0.06);
+  --shadow-sm: 0 1px 2px rgb(20 29 25 / 0.06);
+  --shadow-lg: 0 12px 32px rgb(20 29 25 / 0.12), 0 2px 6px rgb(20 29 25 / 0.06);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111110;
-    --surface: #191917;
-    --surface-2: #1f1f1d;
-    --surface-3: #2a2a27;
-    --fg: #ededea;
-    --muted: #a3a29c;
-    --faint: #75746e;
-    --line: #2d2d2a;
-    --line-strong: #3b3b37;
-    --brand: #8b85ff;
-    --brand-strong: #a29dff;
-    --brand-soft: #25234a;
-    --brand-fg: #ffffff;
+    --bg: #0e1412;
+    --surface: #161d1a;
+    --surface-2: #1d2622;
+    --surface-3: #263029;
+    --fg: #e8eee9;
+    --muted: #8b9a92;
+    --faint: #66746c;
+    --line: #212b27;
+    --line-strong: #293430;
+    --brand: #63c3a5;
+    --brand-strong: #7ed3b8;
+    --brand-soft: #17302a;
+    --brand-fg: #0e1412;
     --owed: #f38b80;
     --owed-soft: #3a201d;
-    --credit: #6fd39a;
-    --credit-soft: #19301f;
-    --warn: #f0b060;
-    --warn-soft: #36291a;
-    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.35);
+    --credit: #85b4d8;
+    --credit-soft: #182935;
+    --warn: #db9e66;
+    --warn-soft: #2e2318;
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
   }
 }
@@ -78,7 +78,14 @@
   --shadow-xs: var(--shadow-xs);
   --shadow-sm: var(--shadow-sm);
   --shadow-lg: var(--shadow-lg);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  /* Squarer corners, as on the product plan: cards 6px, controls 5px. */
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
 }
 
 html { color-scheme: light dark; -webkit-text-size-adjust: 100%; }
@@ -86,17 +93,17 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
 }
 input, select, textarea { background: var(--surface); color: var(--fg); }
+h1, h2, h3 { text-wrap: balance; }
 ::selection { background: var(--brand-soft); }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Native selects get a quiet chevron instead of the platform arrow. */
 select:not([multiple]) {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239a9993' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2395a39b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.55rem center;
   padding-right: 2rem;

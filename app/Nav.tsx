@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, BookOpenCheck, Building2, CalendarDays, ChevronDown, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, NotebookPen, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
+  BarChart3, BookOpenCheck, Building2, CalendarDays, ChevronDown, ClipboardList, CreditCard, Ellipsis, FileSignature, GraduationCap, HandCoins, History, Home, Mail, NotebookPen, Receipt, UserPlus, Users, Wallet, X, type LucideIcon,
 } from "lucide-react";
 
 interface Item { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean; children?: Item[] }
 
 const home: Item = { href: "/", label: "Home", icon: Home, match: (p) => p === "/" };
-const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar") || p.startsWith("/lessons") };
+const calendar: Item = { href: "/calendar", label: "Calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar") };
+const lessons: Item = { href: "/lessons", label: "Lessons", icon: ClipboardList, match: (p) => p.startsWith("/lessons") };
 const students: Item = { href: "/students", label: "Students", icon: GraduationCap, match: (p) => p.startsWith("/students") };
 const notes: Item = { href: "/notes", label: "Session notes", icon: NotebookPen, match: (p) => p.startsWith("/notes") };
 const homework: Item = { href: "/homework", label: "Assignments", icon: BookOpenCheck, match: (p) => p.startsWith("/homework") };
@@ -39,8 +40,8 @@ const money: Item = { href: "/accounts", label: "Money", icon: Wallet, match: (p
  * no office. The profile opens from the person's name.
  */
 function menus(role: string) {
-  if (role === "TUTOR") return { items: [calendar, students, teaching, emails, earnings], bar: [calendar, students, notes, earnings], more: [homework, emails] };
-  return { items: [home, calendar, students, leads, teaching, emails, money, office], bar: [home, calendar, students, accounts], more: [leads, notes, homework, emails, payments, expenses, reports, office, ...office.children!] };
+  if (role === "TUTOR") return { items: [calendar, lessons, students, teaching, emails, earnings], bar: [calendar, students, notes, earnings], more: [lessons, homework, emails] };
+  return { items: [home, calendar, lessons, students, leads, teaching, emails, money, office], bar: [home, calendar, students, accounts], more: [lessons, leads, notes, homework, emails, payments, expenses, reports, office, ...office.children!] };
 }
 
 function NavLink({ it, active, collapsed, sub }: { it: Item; active: boolean; collapsed?: boolean; sub?: boolean }) {

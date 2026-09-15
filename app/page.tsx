@@ -74,7 +74,7 @@ export default async function Home() {
         </Card>
       </div>
 
-      <Card title="Needs attention" description={attention.length === 0 ? "Nothing waiting on you." : "Counted now, not stored. Each one opens where the work is."}>
+      <Card title="Needs attention" description={attention.length === 0 ? "Nothing waiting on you." : undefined}>
         {attention.length === 0 ? <Empty>All caught up.</Empty> : (
           <ul className="divide-y divide-line" data-testid="attention">
             {attention.map((a) => {
