@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Archive, ArchiveRestore, Info, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { type ActionState, deleteStudentAction, setStudentStateAction } from "./actions";
 
 const icon = "inline-flex size-7 items-center justify-center rounded-md text-faint hover:bg-surface-3 hover:text-fg [&_svg]:size-4";
 
 /**
  * The small icons at the end of a student's row: edit, archive or bring
- * back, open, delete. The two that change something ask inline first, so
+ * back, delete. The two that change something ask inline first, so
  * they work where a browser dialog would not.
  */
 export function RowActions({ id, first, archived, listHref }: { id: string; first: string; archived: boolean; listHref: string }) {
@@ -37,10 +37,9 @@ export function RowActions({ id, first, archived, listHref }: { id: string; firs
   }
   return (
     <span className="inline-flex items-center gap-0.5">
-      <Link href={`/students/${id}/edit`} className={icon} title="Edit" aria-label={`Edit ${first}`}><Pencil aria-hidden /></Link>
-      <button type="button" onClick={() => setAsking("archive")} className={icon} title={archived ? "Bring back" : "Archive"} aria-label={`${archived ? "Bring back" : "Archive"} ${first}`}>{archived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}</button>
-      <Link href={`/students/${id}`} className={icon} title="More" aria-label={`Open ${first}`}><Info aria-hidden /></Link>
-      <button type="button" onClick={() => setAsking("delete")} className={`${icon} hover:bg-owed-soft hover:text-owed`} title="Delete" aria-label={`Delete ${first}`}><Trash2 aria-hidden /></button>
+      <Link href={`/students/${id}/edit`} className={icon} data-tip="Edit" aria-label={`Edit ${first}`}><Pencil aria-hidden /></Link>
+      <button type="button" onClick={() => setAsking("archive")} className={icon} data-tip={archived ? "Bring back" : "Archive"} aria-label={`${archived ? "Bring back" : "Archive"} ${first}`}>{archived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}</button>
+      <button type="button" onClick={() => setAsking("delete")} className={`${icon} hover:bg-owed-soft hover:text-owed`} data-tip="Delete" aria-label={`Delete ${first}`}><Trash2 aria-hidden /></button>
     </span>
   );
 }

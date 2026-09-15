@@ -5,7 +5,7 @@ import { prisma } from "@/src/db";
 import { RoleError, requireSession, requireWriter } from "@/src/auth/current";
 import {
   PAYMENT_METHODS, PaymentError, type PaymentMethodInput,
-  recordAdjustment, recordPayment, recordRefund, updatePayment, voidCharge, voidPayment,
+  deletePayment, recordAdjustment, recordPayment, recordRefund, updatePayment, voidCharge, voidPayment,
 } from "@/src/services/payments";
 import { redirect } from "next/navigation";
 import { auditAs } from "@/src/services/audit";
@@ -56,6 +56,8 @@ export async function recordPaymentAction(_prev: ActionState, fd: FormData): Pro
     throw e;
   }
   refresh(accountId);
+  const returnTo = str(fd, "returnTo");
+  if (returnTo.startsWith("/")) redirect(returnTo);
   return { ok: isRefund ? "Refund recorded" : "Payment recorded" };
 }
 
@@ -106,4 +108,41 @@ export async function updatePaymentAction(_p: ActionState, fd: FormData): Promis
   revalidatePath("/payments");
   revalidatePath("/accounts", "layout");
   redirect(back.startsWith("/") ? back : "/payments");
+}
+
+/** Void a row on the payments list. Nothing is deleted; the row stays, struck through, with the reason. */
+export async function voidPaymentRowAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "paymentId");
+  const reason = str(fd, "reason") || "Voided";
+  try {
+    const session = await requireWriter();
+    const p = await prisma.payment.findFirst({ where: { id, organizationId: session.organizationId }, select: { accountId: true, account: { select: { name: true } } } });
+    if (!p) return { error: "Payment not found" };
+    await voidPayment(prisma, id, reason);
+    await auditAs(prisma, session, { action: "payment.void", subjectType: "payment", subjectId: id, summary: `${p.account.name}: ${reason}` });
+    refresh(p.accountId);
+    revalidatePath("/accounts", "layout");
+  } catch (e) {
+    if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
+  return { ok: "Voided" };
+}
+
+/** Delete a mistaken entry from the payments list. The audit log keeps what it was. */
+export async function deletePaymentRowAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "paymentId");
+  try {
+    const session = await requireWriter();
+    const before = await prisma.payment.findFirst({ where: { id, organizationId: session.organizationId }, select: { accountId: true, amountCents: true, paidOn: true, method: true, account: { select: { name: true } } } });
+    if (!before) return { error: "Payment not found" };
+    await deletePayment(prisma, session.organizationId, id);
+    await auditAs(prisma, session, { action: "payment.delete", subjectType: "payment", subjectId: id, summary: `${before.account.name}: ${formatCents(before.amountCents)} by ${before.method.toLowerCase()} on ${before.paidOn.toISOString().slice(0, 10)}` });
+    refresh(before.accountId);
+    revalidatePath("/accounts", "layout");
+  } catch (e) {
+    if (e instanceof PaymentError || e instanceof RoleError) return { error: e.message };
+    throw e;
+  }
+  return { ok: "Deleted" };
 }

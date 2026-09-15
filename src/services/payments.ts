@@ -130,6 +130,21 @@ export async function voidPayment(db: PrismaClient, paymentId: string, reason: s
   await rebuildAccountAllocations(db, p.accountId);
 }
 
+/**
+ * Remove a payment that should never have been entered: a duplicate, the
+ * wrong family. Gone for good, unlike a void, which keeps the row. Its
+ * allocations go with it and the account is rebuilt. A payment already on a
+ * filed tax return stays.
+ */
+export async function deletePayment(db: PrismaClient, organizationId: string, paymentId: string) {
+  const p = await db.payment.findFirst({ where: { id: paymentId, organizationId } });
+  if (!p) throw new PaymentError("Payment not found");
+  if (p.taxReportedAt) throw new PaymentError("This payment is on a filed tax return. Void it instead, or unmark the year on the tax page.");
+  await db.payment.delete({ where: { id: paymentId } });
+  await rebuildAccountAllocations(db, p.accountId);
+  return p;
+}
+
 /** Void a non-lesson charge. Lesson charges are voided by cancelling the lesson. */
 export async function voidCharge(db: PrismaClient, chargeId: string, reason: string) {
   if (!reason.trim()) throw new PaymentError("A reason is required");
@@ -151,14 +166,30 @@ export interface PaymentListRow {
   notes: string | null;
   refundReason: string | null;
   voidedAt: Date | null;
+  voidReason: string | null;
+  taxReportedAt: Date | null;
   accountId: string;
   accountName: string;
 }
 
+export interface PaymentListFilter {
+  /** Only payments on this student's account. */
+  studentId?: string | null;
+  /** Only accounts with a student who has had a lesson with this tutor. */
+  tutorId?: string | null;
+  accountId?: string | null;
+}
+
 /** Payments in a date range, newest first, voided ones included and flagged. */
-export async function listPayments(db: PrismaClient, organizationId: string, from: Date, to: Date): Promise<PaymentListRow[]> {
+export async function listPayments(db: PrismaClient, organizationId: string, from: Date, to: Date, f: PaymentListFilter = {}): Promise<PaymentListRow[]> {
   const rows = await db.payment.findMany({
-    where: { organizationId, paidOn: { gte: from, lte: to } },
+    where: {
+      organizationId,
+      paidOn: { gte: from, lte: to },
+      ...(f.accountId ? { accountId: f.accountId } : {}),
+      ...(f.studentId ? { account: { students: { some: { id: f.studentId } } } } : {}),
+      ...(f.tutorId ? { account: { students: { some: { lessons: { some: { lesson: { tutorId: f.tutorId, deletedAt: null } } } } } } } : {}),
+    },
     include: { account: { select: { name: true } } },
     orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }],
   });
@@ -172,6 +203,8 @@ export async function listPayments(db: PrismaClient, organizationId: string, fro
     notes: p.notes,
     refundReason: p.refundReason,
     voidedAt: p.voidedAt,
+    voidReason: p.voidReason,
+    taxReportedAt: p.taxReportedAt,
     accountId: p.accountId,
     accountName: p.account.name,
   }));

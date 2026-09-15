@@ -4,9 +4,11 @@ import { requireSession } from "@/src/auth/current";
 import { formatDate } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { listAssignments, type EffectiveStatus } from "@/src/services/homework";
-import { Badge, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
+import { Badge, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { StudentFilter } from "@/src/components/StudentFilter";
-import { toggleArchiveAction } from "./actions";
+import { RowLinks } from "@/src/components/RowLinks";
+import { AssignmentRowActions } from "./AssignmentRowActions";
+import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -25,35 +27,35 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
   const tabs: [string, string][] = [["OPEN", "Open"], ["SOLVED", "To review"], ["OVERDUE", "Overdue"], ["ASSIGNED", "Assigned"], ["PENDING", "Not sent"], ["REVIEWED", "Reviewed"], ["ARCHIVED", "Archived"]];
   const current = archived ? "ARCHIVED" : filter;
   const canEdit = s.role !== "ACCOUNTANT";
+  const listHref = `/homework?status=${current}${q.student ? `&student=${q.student}` : ""}`;
+  const here = encodeURIComponent(listHref);
 
   const table = (
-    <TableWrap>
-      <Table data-testid="assignments">
-        <thead><tr><Th>Student</Th><Th>Title</Th><Th>Assigned</Th><Th>Due</Th><Th>Status</Th><Th right>Submitted</Th>{archived && canEdit && <Th></Th>}</tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="hover:bg-surface-2">
-              <Td><Link href={`/students/${r.studentId}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{r.studentName}</Link></Td>
-              <Td><Link href={`/homework/${r.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{r.title || <span className="text-muted">Untitled</span>}</Link></Td>
-              <Td num>{formatDate(r.createdAt)}</Td>
-              <Td num>{r.dueOn ? formatDate(r.dueOn) : <span className="text-muted">none</span>}</Td>
-              <Td><Badge tone={TONE[r.status]}>{r.status === "SOLVED" ? "to review" : r.status.toLowerCase()}</Badge></Td>
-              <Td right num>{r.submissions}</Td>
-              {archived && canEdit && (
-                <Td right>
-                  <form action={toggleArchiveAction}><input type="hidden" name="assignmentId" value={r.id} /><input type="hidden" name="archived" value="1" /><Button variant="link" className="text-xs">Unarchive</Button></form>
-                </Td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </TableWrap>
+    <RowLinks>
+      <TableWrap>
+        <Table data-testid="assignments">
+          <thead><tr><Th>Student</Th><Th>Title</Th><Th className="hidden md:table-cell">Assigned</Th><Th>Due</Th><Th>Status</Th><Th right className="hidden sm:table-cell">Submitted</Th><Th></Th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} data-href={`/homework/${r.id}?returnTo=${here}`} className="hover:bg-surface-2">
+                <Td><Link href={`/students/${r.studentId}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{r.studentName}</Link></Td>
+                <Td><Link href={`/homework/${r.id}?returnTo=${here}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{r.title || <span className="text-muted">Untitled</span>}</Link></Td>
+                <Td num className="hidden md:table-cell">{formatDate(r.createdAt)}</Td>
+                <Td num>{r.dueOn ? formatDate(r.dueOn) : <span className="text-muted">none</span>}</Td>
+                <Td><Badge tone={TONE[r.status]}>{r.status === "SOLVED" ? "to review" : r.status.toLowerCase()}</Badge></Td>
+                <Td right num className="hidden sm:table-cell">{r.submissions}</Td>
+                <Td right className="whitespace-nowrap"><AssignmentRowActions id={r.id} what={r.title || "this assignment"} archived={archived} canDelete={r.submissions === 0} canWrite={canEdit} here={here} /></Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </TableWrap>
+    </RowLinks>
   );
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Assignments" subtitle={`${rows.length} ${archived ? "archived" : "shown"}`} actions={<>{canEdit && <LinkButton href={`/homework/new${q.student ? `?student=${q.student}&returnTo=${encodeURIComponent(`/homework?student=${q.student}`)}` : ""}`} variant="primary">New assignment</LinkButton>}</>} />
+      <PageHeader title="Assignments" subtitle={`${rows.length} ${archived ? "archived" : "shown"}`} actions={<>{canEdit && <LinkButton href={`/homework/new?${q.student ? `student=${q.student}&` : ""}returnTo=${here}`} variant="primary"><Plus aria-hidden />New assignment</LinkButton>}</>} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-1 text-sm" aria-label="Filter">
           {tabs.map(([v, label]) => (

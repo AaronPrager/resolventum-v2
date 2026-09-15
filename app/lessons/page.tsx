@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { prisma } from "@/src/db";
 import { requireSession, tutorScope } from "@/src/auth/current";
-import { formatCents, formatWhen } from "@/src/lib/format";
+import { formatCents, formatDay, formatWhen } from "@/src/lib/format";
 import { Badge, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { LessonFilters } from "./LessonFilters";
+import { LessonRowActions } from "./LessonRowActions";
+import { RowLinks } from "@/src/components/RowLinks";
 
 export const dynamic = "force-dynamic";
 
@@ -94,10 +96,11 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
             {when === "upcoming" ? "Nothing booked that matches." : "No lessons match."}
           </Empty>
         ) : (
+          <RowLinks>
           <TableWrap>
             <Table data-testid="lessons">
               <thead>
-                <tr><Th>When</Th><Th>Student</Th><Th>Subject</Th>{!scope && <Th>Tutor</Th>}<Th right>Minutes</Th><Th right>Price</Th><Th>Status</Th><Th>Note</Th></tr>
+                <tr><Th>When</Th><Th>Student</Th><Th>Subject</Th>{!scope && <Th className="hidden lg:table-cell">Tutor</Th>}<Th right>Price</Th><Th>Status</Th><Th className="hidden xl:table-cell">Note</Th><Th></Th></tr>
               </thead>
               <tbody>
                 {rows.map((l) => {
@@ -105,10 +108,10 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
                   const price = l.students.reduce((x, st) => x + st.priceCents, 0);
                   const off = l.status === "CANCELLED" || l.status === "NO_SHOW";
                   return (
-                    <tr key={l.id} className="hover:bg-surface-2">
+                    <tr key={l.id} data-href={`/lessons/${l.id}?returnTo=${here}`} className="hover:bg-surface-2">
                       <Td num>
                         <Link href={`/lessons/${l.id}?returnTo=${here}`} className={`underline-offset-2 hover:text-brand hover:underline ${off ? "text-muted line-through" : "text-fg"}`}>{formatWhen(l.startsAt, tz)}</Link>
-                        {l.seriesId && <span className="ml-1.5 text-xs text-faint" title="Part of a weekly series">weekly</span>}
+                        <span className="ml-1.5 text-xs text-muted">· {l.allDay ? "all day" : `${l.durationMin} min`}{l.seriesId && <span className="text-faint" title="Part of a weekly series">, weekly</span>}</span>
                       </Td>
                       <Td>
                         {names.length === 0 ? <span className="text-muted">Event</span> : names.map((n, i) => (
@@ -116,12 +119,14 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
                         ))}
                       </Td>
                       <Td><Link href={`/lessons/${l.id}?returnTo=${here}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{l.subject}</Link>{l.locationType === "REMOTE" && <span className="ml-1.5 text-xs text-muted">remote</span>}</Td>
-                      {!scope && <Td>{l.tutor?.name ?? <span className="text-muted">none</span>}</Td>}
-                      <Td right num>{l.allDay ? <span className="text-muted">all day</span> : l.durationMin}</Td>
+                      {!scope && <Td className="hidden lg:table-cell">{l.tutor?.name ?? <span className="text-muted">none</span>}</Td>}
                       <Td right num>{names.length ? formatCents(price) : <span className="text-muted">none</span>}</Td>
                       <Td><Badge tone={STATUS_TONE[l.status]}>{STATUS_LABEL[l.status]}</Badge></Td>
-                      <Td data-sort={names.length === 0 ? "" : l._count.sessionNotes >= l.students.length ? "2 written" : l._count.sessionNotes > 0 ? "1 partly" : "0 none"}>
+                      <Td className="hidden xl:table-cell" data-sort={names.length === 0 ? "" : l._count.sessionNotes >= l.students.length ? "2 written" : l._count.sessionNotes > 0 ? "1 partly" : "0 none"}>
                         {names.length > 0 && (l._count.sessionNotes >= l.students.length ? <span className="text-credit">written</span> : l._count.sessionNotes > 0 ? <span className="text-warn">partly</span> : l.status === "COMPLETED" ? <Link href={`/notes/new?lesson=${l.id}&student=${l.students[0].studentId}&returnTo=${here}`} className="text-brand hover:underline">write</Link> : <span className="text-faint">none</span>)}
+                      </Td>
+                      <Td right className="whitespace-nowrap">
+                        <LessonRowActions id={l.id} what={`${names[0] ?? l.subject}, ${formatDay(l.startsAt, tz)}`} studentId={l.students[0]?.studentId ?? ""} inSeries={l.seriesId !== null} cancelled={off} canWrite={canWrite} here={here} />
                       </Td>
                     </tr>
                   );
@@ -129,6 +134,7 @@ export default async function LessonsPage({ searchParams }: { searchParams: Prom
               </tbody>
             </Table>
           </TableWrap>
+          </RowLinks>
         )}
         {more && <p className="mt-3 text-xs text-muted">Showing the first {LIMIT}. Narrow by tutor or student to see the rest.</p>}
       </Card>

@@ -6,13 +6,14 @@ import { type ActionState, enrollLeadAction, moveLeadAction, saveLeadAction } fr
 
 export interface LeadValues { id?: string; studentFirstName: string; studentLastName: string; grade: string; schoolName: string; studentEmail: string; studentPhone: string; parentName: string; parentEmail: string; parentPhone: string; subjects: string; goals: string; source: string; notes: string }
 
-export function LeadForm({ lead }: { lead?: LeadValues }) {
+export function LeadForm({ lead, returnTo }: { lead?: LeadValues; /** Where to go once saved; without it the form stays put and says so. */ returnTo?: string }) {
   const [state, action, pending] = useActionState(saveLeadAction, {} as ActionState);
   const [key, setKey] = useState(0);
   const v = lead ?? { studentFirstName: "", studentLastName: "", grade: "", schoolName: "", studentEmail: "", studentPhone: "", parentName: "", parentEmail: "", parentPhone: "", subjects: "", goals: "", source: "", notes: "" };
   return (
     <form key={key} action={async (fd) => { await action(fd); if (!lead) setKey((k) => k + 1); }} className="space-y-3" data-testid={lead ? `lead-form-${lead.id}` : "lead-form-new"}>
       {lead?.id && <input type="hidden" name="leadId" value={lead.id} />}
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Student first name"><Input name="studentFirstName" defaultValue={v.studentFirstName} required /></Field>
         <Field label="Last name"><Input name="studentLastName" defaultValue={v.studentLastName} required /></Field>

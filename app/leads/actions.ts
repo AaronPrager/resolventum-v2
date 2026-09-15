@@ -36,6 +36,8 @@ export async function saveLeadAction(_p: ActionState, fd: FormData): Promise<Act
   }
   revalidatePath("/leads");
   revalidatePath("/");
+  const returnTo = str(fd, "returnTo");
+  if (returnTo.startsWith("/")) redirect(returnTo);
   return { ok: id ? "Saved" : "Lead added" };
 }
 
@@ -57,6 +59,7 @@ export async function moveLeadAction(_p: ActionState, fd: FormData): Promise<Act
   }
   revalidatePath("/leads");
   revalidatePath("/");
+  revalidatePath(`/leads/${id}`);
   return { ok: "Moved" };
 }
 

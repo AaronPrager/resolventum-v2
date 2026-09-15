@@ -213,7 +213,8 @@ export async function recentSessionNotes(db: PrismaClient, organizationId: strin
   return db.sessionNote.findMany({
     where: { organizationId, ...(opts.studentId ? { studentId: opts.studentId } : {}), ...(opts.tutorId ? { OR: [{ lesson: { tutorId: opts.tutorId } }, { lessonId: null, ...(opts.userId ? { createdById: opts.userId } : {}) }] } : {}) },
     include: {
-      student: { select: { id: true, firstName: true, lastName: true } },
+      // The email and guardians are for the list's Send icon (see noteContact).
+      student: { select: { id: true, firstName: true, lastName: true, email: true, account: { select: { guardians: { select: { email: true, isPrimary: true, isBilling: true } } } } } },
       lesson: { select: { id: true, startsAt: true, subject: true, tutor: { select: { name: true } } } },
     },
     orderBy: [{ notedOn: "desc" }, { createdAt: "desc" }],

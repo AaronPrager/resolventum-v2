@@ -74,7 +74,7 @@ test("homework: assignment with a file from the computer, student upload through
 });
 
 test("expenses: add one, see it deductible, and in the tax summary", async ({ page }) => {
-  await page.goto("/expenses?month=2026-09");
+  await page.goto("/expenses/new?returnTo=%2Fexpenses%3Fmonth%3D2026-09");
   const form = page.getByTestId("expense-form");
   await form.getByLabel("Date").fill("2026-09-05");
   await form.getByLabel("Amount").fill("40");
@@ -84,7 +84,7 @@ test("expenses: add one, see it deductible, and in the tax summary", async ({ pa
   await form.getByLabel("Tax treatment").selectOption("PARTIAL_USE");
   await form.getByLabel("Business %").fill("50");
   await form.getByRole("button", { name: "Record expense" }).click();
-  await expect(form.getByRole("status")).toHaveText("Expense recorded");
+  await expect(page).toHaveURL(/\/expenses\?month=2026-09/); // recorded, back on the list
   const row = page.getByTestId("expenses").getByRole("row", { name: new RegExp(`${TAG} markers`) });
   await expect(row).toContainText("$40.00");
   await expect(row).toContainText("$20.00");

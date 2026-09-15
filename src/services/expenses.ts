@@ -124,8 +124,15 @@ export async function updateExpense(db: PrismaClient, organizationId: string, ex
 export async function voidExpense(db: PrismaClient, organizationId: string, expenseId: string, reason: string) {
   const e = await db.expense.findFirst({ where: { id: expenseId, organizationId } });
   if (!e) throw new ExpenseError("Expense not found");
-  if (!reason.trim()) throw new ExpenseError("A reason is required");
-  await db.expense.update({ where: { id: expenseId }, data: { voidedAt: new Date(), voidReason: reason.trim() } });
+  await db.expense.update({ where: { id: expenseId }, data: { voidedAt: new Date(), voidReason: reason.trim() || "Voided" } });
+}
+
+/** Remove a mistaken entry for good. A void keeps the line; this does not. The receipt file, if any, stays in the library. */
+export async function deleteExpense(db: PrismaClient, organizationId: string, expenseId: string) {
+  const e = await db.expense.findFirst({ where: { id: expenseId, organizationId } });
+  if (!e) throw new ExpenseError("Expense not found");
+  await db.expense.delete({ where: { id: expenseId } });
+  return e;
 }
 
 export async function listExpenses(db: PrismaClient, organizationId: string, from: Date, to: Date, opts: { includeVoided?: boolean } = {}) {

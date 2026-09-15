@@ -101,7 +101,8 @@ test("edit a payment from the statement", async ({ page }) => {
 
   const row = page.getByTestId("statement").getByRole("row", { name: new RegExp(`${TAG} to edit`) });
   await row.getByRole("link", { name: "Edit" }).click();
-  await expect(page.getByRole("heading", { name: "Payment of $100.00" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payment of $100.00" })).toBeVisible(); // opens read-only
+  await page.getByTestId("edit-record").click();
   const form = page.getByTestId("payment-edit-form");
   await form.getByLabel("Amount").fill("125");
   await form.getByLabel("How").selectOption("CHECK");

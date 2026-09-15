@@ -99,7 +99,8 @@ export async function deleteAssignmentAction(fd: FormData): Promise<void> {
   const s = await requireWriter();
   await deleteAssignment(prisma, s.organizationId, str(fd, "assignmentId"));
   revalidatePath("/homework");
-  redirect("/homework");
+  const returnTo = str(fd, "returnTo");
+  redirect(returnTo.startsWith("/") ? returnTo : "/homework");
 }
 
 export async function feedbackAction(_p: ActionState, fd: FormData): Promise<ActionState> {

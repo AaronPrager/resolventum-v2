@@ -8,7 +8,7 @@ import { AiError, aiConfigured } from "@/src/ai/generate";
 import { discardDraft, draftExpenseFromReceipt, markApproved } from "@/src/ai/drafts";
 import { FileError, storeFile } from "@/src/services/files";
 import { setYearReported } from "@/src/services/taxFiling";
-import { ExpenseError, TREATMENTS, type ExpenseInput, type TaxTreatment, createCategory, createExpense, createRecurring, runRecurring, setTaxYear, updateExpense, voidExpense } from "@/src/services/expenses";
+import { ExpenseError, TREATMENTS, type ExpenseInput, type TaxTreatment, createCategory, createExpense, createRecurring, runRecurring, setTaxYear, updateExpense, voidExpense, deleteExpense } from "@/src/services/expenses";
 
 export interface ActionState { error?: string; ok?: string; draftId?: string }
 
@@ -46,6 +46,8 @@ export async function createExpenseAction(_p: ActionState, fd: FormData): Promis
     if (draftId) await markApproved(prisma, draftId);
   } catch (e) { return friendly(e); }
   refresh();
+  const returnTo = str(fd, "returnTo");
+  if (returnTo.startsWith("/")) redirect(returnTo);
   return { ok: "Expense recorded" };
 }
 
@@ -70,7 +72,28 @@ export async function voidExpenseAction(fd: FormData): Promise<void> {
   const s = await requireWriter();
   await voidExpense(prisma, s.organizationId, str(fd, "expenseId"), str(fd, "reason") || "Voided");
   refresh();
-  redirect("/expenses");
+  const returnTo = str(fd, "returnTo");
+  redirect(returnTo.startsWith("/") ? returnTo : "/expenses");
+}
+
+/** Void from the list; stays on the page. */
+export async function voidExpenseRowAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const s = await requireWriter();
+    await voidExpense(prisma, s.organizationId, str(fd, "expenseId"), str(fd, "reason") || "Voided");
+  } catch (e) { return friendly(e); }
+  refresh();
+  return { ok: "Voided" };
+}
+
+/** Delete from the list; stays on the page. */
+export async function deleteExpenseRowAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const s = await requireWriter();
+    await deleteExpense(prisma, s.organizationId, str(fd, "expenseId"));
+  } catch (e) { return friendly(e); }
+  refresh();
+  return { ok: "Deleted" };
 }
 
 /** Upload a receipt and let the model read it. Returns the draft to prefill the form. */

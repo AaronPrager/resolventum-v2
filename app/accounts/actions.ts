@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/src/db";
 import { RoleError, requireWriter } from "@/src/auth/current";
 import { PeopleError, addGuardian, removeGuardian, updateAccount, updateGuardian } from "@/src/services/people";
@@ -60,4 +61,16 @@ export async function removeGuardianAction(fd: FormData): Promise<void> {
   const s = await requireWriter();
   await removeGuardian(prisma, s.organizationId, str(fd, "guardianId"));
   revalidatePath(`/accounts/${str(fd, "accountId")}`);
+}
+
+/** Archive an account or bring it back. Archived ones leave the default list; the money records stay. */
+export async function setAccountArchivedAction(fd: FormData): Promise<void> {
+  const s = await requireWriter();
+  const id = str(fd, "accountId");
+  const archived = str(fd, "archived") === "1";
+  await prisma.account.updateMany({ where: { id, organizationId: s.organizationId }, data: { archivedAt: archived ? new Date() : null } });
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${id}`);
+  const returnTo = str(fd, "returnTo");
+  redirect(returnTo.startsWith("/") ? returnTo : "/accounts");
 }

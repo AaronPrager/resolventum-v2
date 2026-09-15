@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { NotebookPen, Plus } from "lucide-react";
 import { prisma } from "@/src/db";
 import { requireSession, tutorScope } from "@/src/auth/current";
 import { formatDate, formatWhen } from "@/src/lib/format";
@@ -8,6 +8,10 @@ import { lessonsMissingNotes, recentSessionNotes } from "@/src/services/sessionN
 import { Badge, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { RowLinks } from "@/src/components/RowLinks";
 import { StudentFilter } from "@/src/components/StudentFilter";
+import { NoteRowActions } from "./NoteRowActions";
+import { rowIcon } from "@/src/components/ListRowActions";
+import { emailConfigured } from "@/src/email/send";
+import { noteContact } from "./access";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Session notes" };
@@ -38,6 +42,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   const missing = student ? missingAll.map((l) => ({ ...l, students: l.students.filter((x) => x.id === student) })).filter((l) => l.students.length > 0) : missingAll;
   const owed = missing.reduce((n, l) => n + l.students.length, 0); // for the picked student when one is picked, like the Written count
   const canWrite = s.role !== "ACCOUNTANT";
+  const mailOn = emailConfigured();
   const tabs: [string, string][] = [["", `Written (${notes.length})`], ["todo", `To write (${owed})`]];
   const current = todo ? "todo" : "";
   const back = encodeURIComponent(`/notes${todo ? "?tab=todo" : ""}${student ? `${todo ? "&" : "?"}student=${student}` : ""}`);
@@ -61,21 +66,30 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
       {todo ? (
         <Card>
           {missing.length === 0 ? <Empty>Every lesson from the last two weeks has its note.</Empty> : (
-            <TableWrap>
-              <Table data-testid="notes-to-write">
-                <thead><tr><Th>Lesson</Th><Th>Subject</Th>{!scope && <Th className="hidden sm:table-cell">Tutor</Th>}<Th>Write for</Th></tr></thead>
-                <tbody>
-                  {missing.map((l) => (
-                    <tr key={l.lessonId} className="hover:bg-surface-2">
-                      <Td num>{formatWhen(l.startsAt, s.timezone)}</Td>
-                      <Td>{l.subject}</Td>
-                      {!scope && <Td className="hidden sm:table-cell">{l.tutor ?? ""}</Td>}
-                      <Td><span className="flex flex-wrap gap-x-3">{l.students.map((x) => <Link key={x.id} href={`/notes/new?lesson=${l.lessonId}&student=${x.id}&returnTo=${back}`} className="text-brand hover:underline">{x.name}</Link>)}</span></Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrap>
+            <RowLinks>
+              <TableWrap>
+                <Table data-testid="notes-to-write">
+                  <thead><tr><Th>Lesson</Th><Th>Subject</Th>{!scope && <Th className="hidden sm:table-cell">Tutor</Th>}<Th>Write for</Th><Th></Th></tr></thead>
+                  <tbody>
+                    {missing.map((l) => {
+                      // A group lesson needs one note per student; the row opens the first, the names open each.
+                      const write = (studentId: string) => `/notes/new?lesson=${l.lessonId}&student=${studentId}&returnTo=${back}`;
+                      return (
+                        <tr key={l.lessonId} data-href={write(l.students[0].id)} className="hover:bg-surface-2">
+                          <Td num><Link href={write(l.students[0].id)} className="underline-offset-2 hover:text-brand hover:underline">{formatWhen(l.startsAt, s.timezone)}</Link></Td>
+                          <Td>{l.subject}</Td>
+                          {!scope && <Td className="hidden sm:table-cell">{l.tutor ?? ""}</Td>}
+                          <Td><span className="flex flex-wrap gap-x-3">{l.students.map((x) => <Link key={x.id} href={write(x.id)} className="text-brand hover:underline">{x.name}</Link>)}</span></Td>
+                          <Td right className="whitespace-nowrap">
+                            {canWrite && <Link href={write(l.students[0].id)} className={rowIcon} data-tip="Write" aria-label={`Write the note for ${l.students[0].name}`}><NotebookPen aria-hidden /></Link>}
+                          </Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </TableWrap>
+            </RowLinks>
           )}
           <p className="mt-3 text-xs text-muted">Completed lessons from the last two weeks with a student and no note yet.</p>
         </Card>
@@ -85,7 +99,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
             <RowLinks>
               <TableWrap>
                 <Table data-testid="recent-notes">
-                  <thead><tr><Th>Student</Th><Th>Date</Th><Th>About</Th><Th className="hidden md:table-cell">Covered</Th><Th className="hidden sm:table-cell">Engagement</Th><Th>Sent</Th></tr></thead>
+                  <thead><tr><Th>Student</Th><Th>Date</Th><Th>About</Th><Th className="hidden md:table-cell">Covered</Th><Th className="hidden sm:table-cell">Engagement</Th><Th>Sent</Th><Th></Th></tr></thead>
                   <tbody>
                     {notes.map((n) => (
                       <tr key={n.id} data-href={`/notes/${n.id}?returnTo=${back}`} className="hover:bg-surface-2">
@@ -95,6 +109,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
                         <Td className="hidden max-w-md truncate md:table-cell" title={n.covered}>{n.covered}</Td>
                         <Td className="hidden sm:table-cell" data-sort={n.engagement ?? ""}>{n.engagement ? <Badge tone={n.engagement >= 4 ? "credit" : n.engagement <= 2 ? "owed" : "neutral"}>{n.engagement}/5</Badge> : ""}</Td>
                         <Td num className="whitespace-nowrap">{n.sharedAt ? formatDate(n.sharedAt) : <span className="text-muted">not sent</span>}</Td>
+                        <Td right className="whitespace-nowrap"><NoteRowActions id={n.id} what={`the note about ${n.student.firstName}`} to={noteContact(n.student)} mailOn={mailOn} canWrite={canWrite} here={back} /></Td>
                       </tr>
                     ))}
                   </tbody>

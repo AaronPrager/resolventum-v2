@@ -10,8 +10,8 @@ export interface ExpenseFormValues {
 }
 export interface Option { id: string; name: string }
 
-export function ExpenseForm({ mode, expenseId, draftId, initial, categories, vendors, sources, submitLabel }: {
-  mode: "create" | "update"; expenseId?: string; draftId?: string; initial: ExpenseFormValues; categories: (Option & { treatment: string })[]; vendors: (Option & { categoryId: string | null; treatment: string | null; percent: number | null })[]; sources: Option[]; submitLabel: string;
+export function ExpenseForm({ mode, expenseId, draftId, initial, categories, vendors, sources, submitLabel, returnTo }: {
+  mode: "create" | "update"; expenseId?: string; draftId?: string; /** Where to go once recorded; without it the form stays and says so. */ returnTo?: string; initial: ExpenseFormValues; categories: (Option & { treatment: string })[]; vendors: (Option & { categoryId: string | null; treatment: string | null; percent: number | null })[]; sources: Option[]; submitLabel: string;
 }) {
   const [state, action, pending] = useActionState(mode === "create" ? createExpenseAction : updateExpenseAction, {} as ActionState);
   const [treatment, setTreatment] = useState(initial.taxTreatment);
@@ -33,6 +33,7 @@ export function ExpenseForm({ mode, expenseId, draftId, initial, categories, ven
     <form action={action} className="space-y-3" data-testid="expense-form" key={draftId ?? "form"}>
       {expenseId && <input type="hidden" name="expenseId" value={expenseId} />}
       {draftId && <input type="hidden" name="draftId" value={draftId} />}
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Date"><Input type="date" name="spentOn" defaultValue={initial.spentOn} required /></Field>
         <Field label="Amount"><Input type="text" inputMode="decimal" name="amount" defaultValue={initial.amount} required placeholder="18.49" /></Field>

@@ -7,12 +7,19 @@ import { recordAdjustmentAction, recordPaymentAction, updatePaymentAction } from
 
 const METHODS: [string, string][] = [["ZELLE", "Zelle"], ["VENMO", "Venmo"], ["CASH", "Cash"], ["CHECK", "Check"], ["CARD", "Card"], ["BANK_TRANSFER", "Bank transfer"], ["OTHER", "Other"]];
 
-export function PaymentForm({ accountId, today }: { accountId: string; today: string }) {
+/** Record a payment or refund. On an account page the account is fixed; on the payments list `accounts` gives a picker. */
+export function PaymentForm({ accountId, today, accounts, returnTo }: { accountId?: string; today: string; accounts?: { id: string; name: string }[]; /** Where to go once recorded; without it the form stays put and says so. */ returnTo?: string }) {
   const [state, action, pending] = useActionState(recordPaymentAction, {} as ActionState);
   return (
     <form action={action} className="space-y-3" data-testid="payment-form">
-      <input type="hidden" name="accountId" value={accountId} />
-      <div className="grid grid-cols-2 gap-3">
+      {accounts ? null : <input type="hidden" name="accountId" value={accountId} />}
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+      <div className={accounts ? "grid grid-cols-2 gap-3 sm:grid-cols-4" : "grid grid-cols-2 gap-3"}>
+        {accounts && (
+          <Field label="Account" className="col-span-2">
+            <Select name="accountId" defaultValue={accountId ?? ""} required><option value="" disabled>Pick a family</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
+          </Field>
+        )}
         <Field label="Kind">
           <Select name="kind" defaultValue="PAYMENT"><option value="PAYMENT">Payment received</option><option value="REFUND">Refund given</option></Select>
         </Field>
