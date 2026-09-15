@@ -56,7 +56,7 @@ describe("session notes", () => {
 
   it("writes the parent's email without money in it", () => {
     const m = sessionNoteEmail({ orgName: "Easy STEM", timeZone: "America/New_York", parentFirst: "Dana", note: {
-      covered: "Quadratics", homework: "p. 42", engagement: 5, win: "Got it", struggle: "Signs", nextGoal: "Vertex form",
+      covered: "Quadratics", homework: "p. 42", engagement: 5, win: "Got it", struggle: "Signs", nextGoal: "Vertex form", notedOn: new Date("2026-09-10T00:00:00Z"),
       lesson: { startsAt: new Date("2026-09-10T20:00:00Z"), subject: "Algebra", durationMin: 60, tutor: { name: "Yakov" } }, student: { firstName: "Leo" },
     } });
     expect(m.subject).toBe("Easy STEM: Leo's Algebra lesson, Sep 10, 2026");
@@ -77,6 +77,22 @@ describe("session notes", () => {
     expect(outbox.at(-1)?.to).toBe("other@example.com");
     await saveSessionNote(prisma, orgId, { lessonId, studentId, covered: "Rewritten" });
     expect((await prisma.sessionNote.findUniqueOrThrow({ where: { id: n.id } })).sharedAt).toBeNull();
+  });
+
+  it("a general note needs no lesson, carries its own date, rates no engagement, and mails as a note about the student", async () => {
+    const g = await saveSessionNote(prisma, orgId, { studentId, lessonId: null, notedOn: "2026-09-12", covered: "Met the parents; wants to try the SAT in spring", engagement: 4 });
+    expect(g.lessonId).toBeNull();
+    expect(g.engagement).toBeNull();
+    expect(g.notedOn.toISOString().slice(0, 10)).toBe("2026-09-12");
+    const again = await saveSessionNote(prisma, orgId, { studentId, lessonId: null, noteId: g.id, covered: "Met the parents; SAT in spring is the goal" });
+    expect(again.id).toBe(g.id);
+    expect((await sessionNotesForStudent(prisma, studentId)).map((n) => n.lessonId)).toEqual([null, lessonId]); // newest day first
+    const shared = await shareSessionNote(prisma, orgId, g.id);
+    expect(shared.sharedTo).toBe("dana@example.com");
+    expect(outbox.at(-1)?.subject).toBe("Easy STEM School: a note about Leo, Sep 12, 2026");
+    expect(outbox.at(-1)?.text).toContain("A quick note about Leo, Sep 12, 2026.");
+    await expect(saveSessionNote(prisma, orgId, { studentId, lessonId: null, notedOn: "12/09/2026", covered: "x" })).rejects.toThrow(/date/);
+    await prisma.sessionNote.delete({ where: { id: g.id } });
   });
 
   it("the nightly run shares what is unshared and honours the family's preference", async () => {

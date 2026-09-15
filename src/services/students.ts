@@ -7,7 +7,7 @@ export interface StudentRow {
   id: string;
   name: string;
   grade: string | null;
-  status: "ACTIVE" | "PAUSED" | "GRADUATED";
+  status: "ACTIVE" | "PAUSED";
   archived: boolean;
   accountId: string;
   accountName: string;
@@ -21,7 +21,7 @@ export interface StudentRow {
 export async function listStudents(prisma: PrismaClient, organizationId: string, today: Date, opts: { includeArchived?: boolean; tutorId?: string | null } = {}): Promise<StudentRow[]> {
   const todayStr = today.toISOString().slice(0, 10);
   const rows = await prisma.$queryRaw<
-    { id: string; firstName: string; lastName: string; grade: string | null; status: "ACTIVE" | "PAUSED" | "GRADUATED"; archivedAt: Date | null; accountId: string; accountName: string;
+    { id: string; firstName: string; lastName: string; grade: string | null; status: "ACTIVE" | "PAUSED"; archivedAt: Date | null; accountId: string; accountName: string;
       balance: bigint; lastLessonAt: Date | null; nextLessonAt: Date | null; lessonCount: bigint }[]
   >`
     select s.id, s."firstName", s."lastName", s.grade, s.status::text as status, s."archivedAt", s."accountId", a.name as "accountName",
@@ -120,10 +120,10 @@ export async function archiveStudent(db: PrismaClient, organizationId: string, s
   return r;
 }
 
-export type StudentStatus = "ACTIVE" | "PAUSED" | "GRADUATED";
+export type StudentStatus = "ACTIVE" | "PAUSED";
 
 /**
- * Change a student's status. Going from active to paused or graduated stops
+ * Change a student's status. Going from active to paused stops
  * their future lessons the way archiving does; they stay on the list and the
  * page, only out of the pickers. Coming back to active restores nothing: the
  * owner books the next lesson or series by hand.
@@ -132,9 +132,31 @@ export async function setStudentStatus(db: PrismaClient, organizationId: string,
   const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
   if (!student) throw new StudentError("Student not found");
   if (student.status === status) return { changed: false, cancelledLessons: 0, endedSeries: 0 };
-  const stopped = status === "ACTIVE" ? { cancelledLessons: 0, endedSeries: 0 } : await stopFutureLessons(db, studentId, status === "PAUSED" ? "Student paused" : "Student graduated", now);
+  const stopped = status === "ACTIVE" ? { cancelledLessons: 0, endedSeries: 0 } : await stopFutureLessons(db, studentId, "Student paused", now);
   await db.student.update({ where: { id: studentId }, data: { status } });
   return { changed: true, ...stopped };
+}
+
+export type StudentState = "ACTIVE" | "PAUSED" | "ARCHIVED";
+
+/** How a student stands, as one word: archived wins over the status column. */
+export function studentState(s: { status: StudentStatus; archivedAt: Date | null }): StudentState {
+  return s.archivedAt ? "ARCHIVED" : s.status;
+}
+
+/**
+ * The one way to move a student between active, paused, and archived.
+ * Leaving active stops their future lessons; coming back restores nothing.
+ */
+export async function setStudentState(db: PrismaClient, organizationId: string, studentId: string, state: StudentState, now = new Date()): Promise<{ changed: boolean; from: StudentState; cancelledLessons: number; endedSeries: number }> {
+  const student = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null } });
+  if (!student) throw new StudentError("Student not found");
+  const from = studentState(student);
+  if (from === state) return { changed: false, from, cancelledLessons: 0, endedSeries: 0 };
+  if (state === "ARCHIVED") return { changed: true, from, ...(await archiveStudent(db, organizationId, studentId, now)) };
+  if (student.archivedAt) await db.student.update({ where: { id: studentId }, data: { archivedAt: null } });
+  const r = await setStudentStatus(db, organizationId, studentId, state, now);
+  return { changed: true, from, cancelledLessons: r.cancelledLessons, endedSeries: r.endedSeries };
 }
 
 export interface ArchiveCandidate { id: string; name: string; lastLessonAt: Date | null; balanceCents: number }
@@ -142,7 +164,7 @@ export interface ArchiveCandidate { id: string; name: string; lastLessonAt: Date
 /**
  * Active students who look dormant: no lesson taught in `days` days, nothing
  * scheduled ahead, and on the books longer than that. The dashboard shows
- * them so the owner can pause, graduate, or archive by hand.
+ * them so the owner can pause or archive by hand.
  */
 export async function archiveCandidates(db: PrismaClient, organizationId: string, now = new Date(), days = 60): Promise<ArchiveCandidate[]> {
   const since = new Date(now.getTime() - days * 86400000);
@@ -169,7 +191,7 @@ export async function unarchiveStudent(db: PrismaClient, organizationId: string,
   await db.student.update({ where: { id: studentId }, data: { archivedAt: null } });
 }
 
-/** Students for the lesson form's pickers: active ones only (not paused, graduated, or archived), last name first, with their usual price and subject. */
+/** Students for the lesson form's pickers: active ones only (not paused or archived), last name first, with their usual price and subject. */
 export async function studentChoices(db: PrismaClient, organizationId: string, include: string[] = []) {
   const rows = await db.student.findMany({
     where: { organizationId, deletedAt: null, OR: [{ archivedAt: null, status: "ACTIVE" }, { id: { in: include } }] },

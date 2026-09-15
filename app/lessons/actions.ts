@@ -9,8 +9,6 @@ import { formatCents } from "@/src/lib/format";
 import { LessonError, cancelLesson, createLesson, deleteLesson, issueMakeupCredit, markNoShow, restoreLesson, updateLesson } from "@/src/services/lessons";
 import { CategoryError } from "@/src/services/lessonCategories";
 import { cancelLessonAndFuture, createSeries, deleteLessonAndFuture, updateLessonAndFuture } from "@/src/services/series";
-import { SessionNoteError, deleteSessionNote, saveSessionNote, shareSessionNote } from "@/src/services/sessionNotes";
-import { EmailError } from "@/src/email/send";
 import { auditAs } from "@/src/services/audit";
 
 export interface ActionState {
@@ -200,44 +198,3 @@ export async function deleteLessonAction(lessonId: string, scope: "one" | "futur
 
 // ---------------------------------------------------------------- session notes
 
-export async function saveSessionNoteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
-  const lessonId = str(fd, "lessonId");
-  const studentId = str(fd, "studentId");
-  try {
-    const { session } = await ownedLesson(lessonId);
-    const eng = str(fd, "engagement");
-    await saveSessionNote(prisma, session.organizationId, {
-      lessonId, studentId, covered: str(fd, "covered"), homework: str(fd, "homework"), engagement: eng ? Number(eng) : null,
-      win: str(fd, "win"), struggle: str(fd, "struggle"), nextGoal: str(fd, "nextGoal"),
-    }, session.userId);
-  } catch (e) {
-    if (e instanceof SessionNoteError || e instanceof LessonError || e instanceof RoleError) return { error: e.message };
-    throw e;
-  }
-  revalidatePath(`/lessons/${lessonId}`);
-  revalidatePath(`/students/${studentId}`);
-  revalidatePath("/");
-  return { ok: "Note saved" };
-}
-
-export async function shareSessionNoteAction(_p: ActionState, fd: FormData): Promise<ActionState> {
-  const lessonId = str(fd, "lessonId");
-  try {
-    const { session, label } = await ownedLesson(lessonId);
-    const n = await shareSessionNote(prisma, session.organizationId, str(fd, "noteId"), { to: str(fd, "to") || null });
-    await auditAs(prisma, session, { action: "note.share", subjectType: "note", subjectId: n.id, summary: `${label}, sent to ${n.sharedTo}` });
-    revalidatePath(`/lessons/${lessonId}`);
-    return { ok: `Sent to ${n.sharedTo}` };
-  } catch (e) {
-    if (e instanceof SessionNoteError || e instanceof EmailError || e instanceof LessonError || e instanceof RoleError) return { error: e.message };
-    throw e;
-  }
-}
-
-export async function deleteSessionNoteAction(fd: FormData): Promise<void> {
-  const lessonId = str(fd, "lessonId");
-  const { session } = await ownedLesson(lessonId);
-  await deleteSessionNote(prisma, session.organizationId, str(fd, "noteId")).catch((e) => { if (!(e instanceof SessionNoteError)) throw e; });
-  revalidatePath(`/lessons/${lessonId}`);
-  revalidatePath(`/students/${str(fd, "studentId")}`);
-}

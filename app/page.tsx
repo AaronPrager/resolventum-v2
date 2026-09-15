@@ -35,7 +35,7 @@ export default async function Home() {
   const attention = [
     { n: d.notesMissing, icon: NotebookPen, label: "session notes to write", hint: "Lessons from the last week without a note for the family.", href: "/notes", tone: "brand" as const },
     { n: d.atRisk.length, icon: AlertTriangle, label: "families to check on", hint: d.atRisk.slice(0, 3).map((a) => a.name).join(", ") + (d.atRisk.length > 3 ? ` and ${d.atRisk.length - 3} more` : ""), href: "/accounts", tone: "warn" as const },
-    { n: d.dormant.length, icon: Moon, label: "students with nothing going on", hint: "No lesson in 60 days and nothing booked. Pause, graduate, or archive them.", href: "/students?status=ACTIVE", tone: "muted" as const },
+    { n: d.dormant.length, icon: Moon, label: "students with nothing going on", hint: "No lesson in 60 days and nothing booked. Pause, graduate, or archive them.", href: "/students?quiet=1", tone: "muted" as const },
     { n: d.leads.open, icon: UserPlus, label: "open leads", hint: `${d.leads.inquiries} new inquir${d.leads.inquiries === 1 ? "y" : "ies"} waiting for a first call.`, href: "/leads", tone: "brand" as const },
   ].filter((a) => a.n > 0);
 

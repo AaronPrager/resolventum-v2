@@ -78,3 +78,25 @@ describe("student status", () => {
     expect(soon.map((c) => c.id)).not.toContain(estella.id);
   });
 });
+
+describe("one switch for active, paused, archived", () => {
+  it("moves through every state and back, and archived wins over the status column", async () => {
+    const org = await prisma.organization.findFirstOrThrow();
+    const student = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id, firstName: "Estella", archivedAt: null } });
+    const now = new Date("2031-01-01T12:00:00Z");
+    const { setStudentState, studentState } = await import("./students");
+    expect(await setStudentState(prisma, org.id, student.id, "ACTIVE", now)).toMatchObject({ changed: false, from: "ACTIVE" });
+    expect(await setStudentState(prisma, org.id, student.id, "PAUSED", now)).toMatchObject({ changed: true, from: "ACTIVE" });
+    expect(await setStudentState(prisma, org.id, student.id, "ARCHIVED", now)).toMatchObject({ changed: true, from: "PAUSED" });
+    let s = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
+    expect(studentState(s)).toBe("ARCHIVED");
+    expect(s.status).toBe("PAUSED");
+    expect(await setStudentState(prisma, org.id, student.id, "PAUSED", now)).toMatchObject({ changed: true, from: "ARCHIVED" });
+    s = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
+    expect(s.archivedAt).toBeNull();
+    expect(studentState(s)).toBe("PAUSED");
+    expect(await setStudentState(prisma, org.id, student.id, "ACTIVE", now)).toMatchObject({ changed: true, from: "PAUSED" });
+    expect(studentState(await prisma.student.findUniqueOrThrow({ where: { id: student.id } }))).toBe("ACTIVE");
+    await expect(setStudentState(prisma, "not-an-org", student.id, "ACTIVE", now)).rejects.toThrow(/not found/);
+  });
+});

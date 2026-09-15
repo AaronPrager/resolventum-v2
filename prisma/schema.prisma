@@ -311,8 +311,6 @@ enum StudentStatus {
   ACTIVE
   /// Taking a break; kept in the pickers, left out of active counts.
   PAUSED
-  /// Finished; kept for history.
-  GRADUATED
 }
 
 model Student {
@@ -480,16 +478,20 @@ model ProgressNote {
   @@index([lessonId])
 }
 
-/// The structured note a tutor writes after a lesson, one per student on it.
-/// Five things a parent wants to know, and what the next lesson is for.
+/// The structured note a tutor writes about a student: after a lesson (one
+/// per student on it), or a general one tied to no lesson. Five things a
+/// parent wants to know, and what the next lesson is for.
 model SessionNote {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lessonId       String
-  lesson         Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  /// Null for a general note about the student.
+  lessonId       String?
+  lesson         Lesson?      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   studentId      String
   student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// The day the note is about: the lesson's day, or the day given for a general note.
+  notedOn        DateTime     @db.Date
   covered        String
   homework       String?
   /// 1 (checked out) to 5 (fully engaged).
@@ -505,7 +507,7 @@ model SessionNote {
   updatedAt      DateTime     @updatedAt
 
   @@unique([lessonId, studentId])
-  @@index([studentId, createdAt])
+  @@index([studentId, notedOn])
   @@index([organizationId, sharedAt])
 }
 

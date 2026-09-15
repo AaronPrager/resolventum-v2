@@ -10,6 +10,8 @@ import { sessionNotesForStudent } from "@/src/services/sessionNotes";
 import { accountBalances } from "@/src/services/balances";
 import { Avatar, Badge, Balance, Card, Empty, LinkButton } from "@/src/components/ui";
 import type React from "react";
+import { StatusSwitch } from "./StatusSwitch";
+import { studentState } from "@/src/services/students";
 
 /**
  * The right-hand side of the Students page: everything a tutor needs about
@@ -32,7 +34,7 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
     money ? accountBalances(prisma, student.organization.id, localDateOnly(now, session.organizationTimezone)) : Promise.resolve([]),
   ]);
   // Every lesson that has a note, not just the few notes shown below.
-  const noted = new Set(notedRows.map((n) => n.lessonId));
+  const noted = new Set(notedRows.map((n) => n.lessonId).filter((x): x is string => !!x));
   const balance = balances.find((b) => b.accountId === student.accountId)?.balanceCents ?? 0;
   const mine = (l: (typeof student.lessons)[number]) => !scope || l.lesson.tutorId === scope;
   const upcoming = student.lessons.filter((l) => l.lesson.startsAt > now && l.lesson.status === "SCHEDULED" && mine(l)).reverse().slice(0, 4);
@@ -41,6 +43,7 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
   const since = new Date(now.getTime() - 30 * 86400000);
   const needNote = student.lessons.filter((l) => mine(l) && l.lesson.status === "COMPLETED" && l.lesson.startsAt <= now && l.lesson.startsAt >= since && !noted.has(l.lesson.id));
   const openHomework = student.assignments.filter((a) => a.status !== "REVIEWED");
+  const canWrite = session.role !== "ACCOUNTANT";
   const here = `/students?s=${student.id}`;
   const back = encodeURIComponent(here);
   const primary = student.account.guardians.find((g) => g.isPrimary) ?? student.account.guardians[0];
@@ -52,8 +55,7 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
         <div className="min-w-0 flex-1">
           <h2 className="flex flex-wrap items-center gap-2 text-xl font-semibold tracking-[-0.02em]">
             {student.firstName} {student.lastName}
-            {student.status !== "ACTIVE" && <Badge tone={student.status === "PAUSED" ? "warn" : "neutral"}>{student.status.toLowerCase()}</Badge>}
-            {student.archivedAt && <Badge>archived</Badge>}
+            {!canWrite && studentState(student) !== "ACTIVE" && <Badge tone={student.archivedAt ? "neutral" : "warn"}>{studentState(student).toLowerCase()}</Badge>}
           </h2>
           <p className="text-sm text-muted">{[student.grade && `Grade ${student.grade}`, student.schoolName, student.defaultSubject].filter(Boolean).join(" · ") || "No grade or subject yet"}</p>
         </div>
@@ -62,9 +64,10 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
 
       <div className="flex flex-wrap gap-2">
         {session.role !== "ACCOUNTANT" && <LinkButton href={`/lessons/new?student=${student.id}&returnTo=${back}`} variant="primary"><CalendarPlus aria-hidden />New lesson</LinkButton>}
-        {needNote[0] && <LinkButton href={`/lessons/${needNote[0].lesson.id}?returnTo=${back}#notes`} variant="secondary" title={`${needNote.length} lesson${needNote.length === 1 ? "" : "s"} from the last 30 days without a session note`}><NotebookPen aria-hidden />Write the note{needNote.length > 1 ? ` (${needNote.length} owed)` : ""}</LinkButton>}
+        {needNote[0] && <LinkButton href={`/notes/new?lesson=${needNote[0].lesson.id}&student=${student.id}&returnTo=${back}`} variant="secondary" title={`${needNote.length} lesson${needNote.length === 1 ? "" : "s"} from the last 30 days without a session note`}><NotebookPen aria-hidden />Write the note{needNote.length > 1 ? ` (${needNote.length} owed)` : ""}</LinkButton>}
         <LinkButton href={`/homework?student=${student.id}`} variant="secondary"><BookOpenCheck aria-hidden />Homework</LinkButton>
         {session.role !== "ACCOUNTANT" && <LinkButton href={`/students/${student.id}/edit`} variant="secondary"><Pencil aria-hidden />Edit</LinkButton>}
+        {canWrite && <StatusSwitch studentId={student.id} state={studentState(student)} first={student.firstName} scheduled={student.lessons.filter((l) => l.lesson.startsAt > now && l.lesson.status === "SCHEDULED").length} returnTo={here} />}
       </div>
 
       <div className="space-y-3">
@@ -109,26 +112,33 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
                 <ul className="space-y-2 text-sm">
                   {notes.slice(0, 3).map((n) => (
                     <li key={n.id}>
-                      <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted"><span className="tabular-nums">{formatDate(n.lesson.startsAt)}</span><span>{n.lesson.subject}</span>{n.engagement && <span>{n.engagement}/5</span>}<span>{n.sharedAt ? "sent" : "not sent"}</span></div>
+                      <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted">
+                        <Link href={`/notes/${n.id}?returnTo=${back}`} className="tabular-nums hover:text-brand hover:underline">{formatDate(n.notedOn)}</Link>
+                        <span>{n.lesson ? n.lesson.subject || "lesson" : "general"}</span>
+                        {n.engagement && <span>{n.engagement}/5</span>}
+                        <span>{n.sharedAt ? "sent" : "not sent"}</span>
+                      </div>
                       <p className="leading-snug">{n.covered}</p>
                       {n.nextGoal && <p className="text-xs text-muted">Next: {n.nextGoal}</p>}
                     </li>
                   ))}
                 </ul>
               )}
+              {canWrite && <Link href={`/notes/new?student=${student.id}&returnTo=${back}`} className="mt-2 inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted hover:bg-surface-3 hover:text-fg"><Plus className="size-3.5" aria-hidden />Add a note</Link>}
             </Column>
             <Column title={`Homework${openHomework.length ? ` · ${openHomework.length} open` : ""}`} action={<Link href={`/homework?student=${student.id}`} className="text-xs text-brand hover:underline">All</Link>}>
               {student.assignments.length === 0 ? <p className="text-sm text-muted">Nothing assigned.</p> : (
                 <ul className="space-y-1 text-sm">
                   {student.assignments.slice(0, 4).map((a) => (
                     <li key={a.id} className="flex flex-wrap items-center gap-x-2">
-                      <Link href={`/homework/${a.id}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{a.title}</Link>
+                      <Link href={`/homework/${a.id}?returnTo=${back}`} className="text-fg underline-offset-2 hover:text-brand hover:underline">{a.title}</Link>
                       <Badge tone={a.status === "REVIEWED" ? "credit" : a.status === "OVERDUE" ? "owed" : a.status === "SOLVED" ? "brand" : "neutral"}>{a.status.toLowerCase()}</Badge>
                       <span className="text-xs text-muted tabular-nums">{a.dueOn ? `due ${formatDate(a.dueOn)}` : ""}{a._count.submissions > 0 ? ` · ${a._count.submissions} submitted` : ""}</span>
                     </li>
                   ))}
                 </ul>
               )}
+              {canWrite && <Link href={`/homework/new?student=${student.id}&returnTo=${back}`} className="mt-2 inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted hover:bg-surface-3 hover:text-fg"><Plus className="size-3.5" aria-hidden />Add homework</Link>}
             </Column>
           </div>
         </Card>

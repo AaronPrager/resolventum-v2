@@ -13,7 +13,8 @@ import { cancelLessonAction, createLessonAction, restoreLessonAction } from "@/a
 import { Pencil, Plus } from "lucide-react";
 import { Avatar, Badge, Balance, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
-import { archiveStudentAction, unarchiveStudentAction } from "../actions";
+import { StatusSwitch } from "../StatusSwitch";
+import { studentState } from "@/src/services/students";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   if (scope && !student.lessons.some((l) => l.lesson.tutorId === scope)) notFound();
   const notes = await sessionNotesForStudent(prisma, student.id, 12);
   const categories = await listLessonCategories(prisma, student.organization.id);
-  const noted = new Set(notes.map((n) => n.lesson.id));
+  const noted = new Set(notes.map((n) => n.lesson?.id).filter((x): x is string => !!x));
   const choices = await studentChoices(prisma, student.organizationId, [student.id]);
   const tz = student.organization.timezone;
   const balances = await accountBalances(prisma, student.organization.id, localDateOnly(new Date(), student.organization.timezone));
@@ -52,20 +53,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
             <LinkButton href={`/students/${student.id}/update`} variant="primary">Parent update (AI)</LinkButton>
             <LinkButton href={`/students/${student.id}/edit`} variant="secondary"><Pencil aria-hidden />Edit</LinkButton>
             <LinkButton href={`/homework?student=${student.id}`} variant="secondary">Homework</LinkButton>
-            {student.archivedAt ? (
-              <form action={unarchiveStudentAction}>
-                <input type="hidden" name="studentId" value={student.id} />
-                <Button variant="secondary">Unarchive</Button>
-              </form>
-            ) : (
-              <ConfirmForm
-                action={archiveStudentAction}
-                message={`Archive ${student.firstName}? ${scheduledSolo > 0 ? `${scheduledSolo} scheduled lesson${scheduledSolo === 1 ? "" : "s"} will be cancelled and any weekly series stops. ` : ""}Past lessons, payments, and the balance stay. You can unarchive later.`}
-              >
-                <input type="hidden" name="studentId" value={student.id} />
-                <Button variant="secondary" className="text-owed">Archive</Button>
-              </ConfirmForm>
-            )}
+            {session.role !== "ACCOUNTANT" && <StatusSwitch studentId={student.id} state={studentState(student)} first={student.firstName} scheduled={scheduledSolo} returnTo={`/students/${student.id}`} />}
           </>
         }
       />
@@ -127,14 +115,14 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
       <LessonTable title={`Upcoming (${upcoming.length})`} rows={showAll ? upcoming : upcoming.slice(0, 8)} hidden={showAll ? 0 : Math.max(0, upcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" noted={noted} />
       <LessonTable title={`Past (${past.length})`} rows={showAll ? past : past.slice(0, 12)} hidden={showAll ? 0 : Math.max(0, past.length - 12)} tz={tz} studentId={student.id} testId="past" noted={noted} />
 
-      <Card title="Session notes" actions={<span className="text-xs text-muted">Written on the lesson, sent to the family</span>}>
-        {notes.length === 0 ? <p className="text-sm text-muted">No session notes yet. Open a past lesson to write one.</p> : (
+      <Card title="Session notes" actions={session.role !== "ACCOUNTANT" ? <Link href={`/notes/new?student=${student.id}&returnTo=${encodeURIComponent(`/students/${student.id}`)}`} className="text-sm text-brand hover:underline">New note</Link> : undefined}>
+        {notes.length === 0 ? <p className="text-sm text-muted">No session notes yet.</p> : (
           <ul className="divide-y divide-line" data-testid="session-notes">
             {notes.map((n) => (
               <li key={n.id} className="py-2.5 text-sm">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <Link href={`/lessons/${n.lesson.id}#notes`} className="w-40 shrink-0 tabular-nums text-muted hover:text-brand hover:underline">{formatWhen(n.lesson.startsAt, tz)}</Link>
-                  <span className="font-medium">{n.lesson.subject}</span>
+                  <Link href={`/notes/${n.id}?returnTo=${encodeURIComponent(`/students/${student.id}`)}`} className="w-40 shrink-0 tabular-nums text-muted hover:text-brand hover:underline">{n.lesson ? formatWhen(n.lesson.startsAt, tz) : formatDate(n.notedOn)}</Link>
+                  <span className="font-medium">{n.lesson ? n.lesson.subject : "General note"}</span>
                   {n.engagement && <Badge tone={n.engagement >= 4 ? "credit" : n.engagement <= 2 ? "owed" : "neutral"}>engagement {n.engagement}/5</Badge>}
                   <span className="text-xs text-muted">{n.sharedAt ? `sent ${formatDate(n.sharedAt)}` : "not sent"}</span>
                 </div>
@@ -205,7 +193,7 @@ function LessonTable({ title, rows, hidden, tz, studentId, testId, noted }: { ti
                     <Td className="hidden sm:table-cell"><span className="no-underline"><Badge tone={s.lesson.status === "CANCELLED" ? "owed" : s.lesson.status === "NO_SHOW" ? "warn" : s.lesson.status === "COMPLETED" ? "neutral" : "brand"}>{s.lesson.status.toLowerCase().replace("_", " ")}</Badge></span></Td>
                     <Td right>
                       <span className="inline-flex gap-3 no-underline">
-                        {needsNote && <Link href={`/lessons/${s.lesson.id}#notes`} className="text-warn hover:underline">Note</Link>}
+                        {needsNote && <Link href={`/notes/new?lesson=${s.lesson.id}&student=${studentId}&returnTo=${encodeURIComponent(`/students/${studentId}`)}`} className="text-warn hover:underline">Note</Link>}
                         <Link href={`/lessons/${s.lesson.id}`} className="hidden text-brand hover:underline sm:inline">Edit</Link>
                         {cancelled ? (
                           <form action={restoreLessonAction} className="inline">

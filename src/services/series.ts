@@ -77,7 +77,7 @@ export async function createSeries(db: PrismaClient, input: SeriesInput, created
 /**
  * Generate missing lessons for every open-ended series up to the horizon.
  * Copies subject, tutor, roster, prices, and the rest from the latest lesson
- * of the series. Students who are archived, paused, or graduated since are
+ * of the series. Students who are archived or paused since are
  * left off; a series whose whole roster is gone stops growing. Returns the
  * number of lessons created.
  */

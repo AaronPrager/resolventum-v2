@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
 import { RoleError, requireWriter } from "@/src/auth/current";
 import { localDateOnly } from "@/src/lib/tz";
-import { archiveStudent, setStudentStatus, unarchiveStudent } from "@/src/services/students";
+import { type StudentState, setStudentState } from "@/src/services/students";
 import { auditAs } from "@/src/services/audit";
 import { PeopleError, type StudentInput, createStudent, moveStudent, updateStudent } from "@/src/services/people";
 
@@ -30,7 +30,6 @@ function readStudent(fd: FormData): StudentInput {
     defaultPriceCents: price ? Math.round(Number(price) * 100) : null,
     difficulties: str(fd, "difficulties"),
     notes: str(fd, "notes"),
-    ...(fd.has("status") ? { status: (["ACTIVE", "PAUSED", "GRADUATED"].includes(str(fd, "status")) ? str(fd, "status") : "ACTIVE") as "ACTIVE" | "PAUSED" | "GRADUATED" } : {}),
   };
 }
 function known(e: unknown): string | null {
@@ -61,12 +60,7 @@ export async function updateStudentAction(_p: ActionState, fd: FormData): Promis
   const id = str(fd, "studentId");
   try {
     const session = await requireWriter();
-    const { status, ...input } = readStudent(fd);
-    const st = await updateStudent(prisma, session.organizationId, id, input);
-    if (status) {
-      const r = await setStudentStatus(prisma, session.organizationId, id, status);
-      if (r.changed) await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${st.status.toLowerCase()} to ${status.toLowerCase()}${r.cancelledLessons ? `, ${r.cancelledLessons} lessons cancelled` : ""}${r.endedSeries ? `, ${r.endedSeries} series ended` : ""}` });
-    }
+    await updateStudent(prisma, session.organizationId, id, readStudent(fd));
   } catch (e) {
     const m = known(e);
     if (m) return { error: m };
@@ -97,21 +91,25 @@ export async function moveStudentAction(_p: ActionState, fd: FormData): Promise<
 
 
 
-export async function archiveStudentAction(fd: FormData) {
-  const session = await requireWriter();
-  const id = String(fd.get("studentId") ?? "");
-  const r = await archiveStudent(prisma, session.organizationId, id);
-  await auditAs(prisma, session, { action: "student.archive", subjectType: "student", subjectId: id, summary: `${r.cancelledLessons} lessons cancelled, ${r.endedSeries} series ended` });
-  revalidatePath("/students");
-  revalidatePath("/calendar");
-  redirect(`/students/${id}`);
-}
+const STATES: StudentState[] = ["ACTIVE", "PAUSED", "ARCHIVED"];
 
-export async function unarchiveStudentAction(fd: FormData) {
+/** The one action that moves a student between active, paused, and archived. */
+export async function setStudentStateAction(fd: FormData) {
   const session = await requireWriter();
-  const id = String(fd.get("studentId") ?? "");
-  await unarchiveStudent(prisma, session.organizationId, id);
-  await auditAs(prisma, session, { action: "student.unarchive", subjectType: "student", subjectId: id, summary: "Brought back" });
+  const id = str(fd, "studentId");
+  const state = str(fd, "state") as StudentState;
+  if (!STATES.includes(state)) throw new PeopleError("Unknown status");
+  const r = await setStudentState(prisma, session.organizationId, id, state);
+  if (r.changed) {
+    const st = await prisma.student.findUniqueOrThrow({ where: { id }, select: { firstName: true, lastName: true } });
+    await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${r.from.toLowerCase()} to ${state.toLowerCase()}${r.cancelledLessons ? `, ${r.cancelledLessons} lessons cancelled` : ""}${r.endedSeries ? `, ${r.endedSeries} series ended` : ""}` });
+  }
   revalidatePath("/students");
-  redirect(`/students/${id}`);
+  revalidatePath(`/students/${id}`);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+  const returnTo = str(fd, "returnTo");
+  // From the list, land on the tab the student is now under, still selected.
+  if (!returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.startsWith("/students?")) redirect(`/students?${state === "ARCHIVED" ? "status=ARCHIVED&" : ""}s=${id}`);
+  redirect(returnTo);
 }

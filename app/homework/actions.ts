@@ -25,13 +25,15 @@ export async function createAssignmentAction(_p: ActionState, fd: FormData): Pro
   let id: string;
   try {
     const { assignment } = await createAssignment(prisma, s.organizationId, {
-      studentId: str(fd, "studentId"), title: str(fd, "title"), description: str(fd, "description") || null, dueOn: str(fd, "dueOn") || null,
+      studentId: str(fd, "studentId"), lessonId: str(fd, "lessonId") || null, title: str(fd, "title"), description: str(fd, "description") || null, dueOn: str(fd, "dueOn") || null,
       fileIds: fd.getAll("fileIds").map(String).filter(Boolean),
     }, s.userId);
     id = assignment.id;
   } catch (e) { return friendly(e); }
   revalidatePath("/homework");
-  redirect(`/homework/${id}`);
+  revalidatePath("/students");
+  const returnTo = str(fd, "returnTo");
+  redirect(`/homework/${id}${returnTo.startsWith("/") && !returnTo.startsWith("//") ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`);
 }
 
 export async function updateAssignmentAction(_p: ActionState, fd: FormData): Promise<ActionState> {

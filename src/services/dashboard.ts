@@ -119,7 +119,7 @@ export async function ownerDashboard(db: PrismaClient, organizationId: string, t
     notesMissing: missing.reduce((s, l) => s + l.students.length, 0),
     notesMissingLessons: missing.slice(0, 8),
     leads: { open: leads.INQUIRY + leads.CONSULT_BOOKED + leads.TRIAL, inquiries: leads.INQUIRY },
-    students: { active: count("ACTIVE"), paused: count("PAUSED"), graduated: count("GRADUATED") },
+    students: { active: count("ACTIVE"), paused: count("PAUSED") },
     /** Active students with no lesson in 60 days and nothing booked: pause, graduate, or archive them. */
     dormant,
     /** Today's lessons in the school's zone, cancelled ones included and flagged. */

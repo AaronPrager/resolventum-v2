@@ -17,7 +17,6 @@ export interface StudentValues {
   difficulties: string;
   notes: string;
   /** Edit only. */
-  status?: "ACTIVE" | "PAUSED" | "GRADUATED";
 }
 
 const GRADES = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "College", "Adult"];
@@ -52,15 +51,6 @@ export function StudentForm({ studentId, initial, accounts }: { studentId?: stri
         <Field label="Date of birth"><Input type="date" name="dateOfBirth" defaultValue={initial.dateOfBirth} /></Field>
         <Field label="Student email" className="col-span-1 sm:col-span-2" hint="For homework links"><Input type="email" name="email" defaultValue={initial.email} /></Field>
         <Field label="Student phone" className="col-span-1 sm:col-span-2"><Input name="phone" defaultValue={initial.phone} /></Field>
-        {studentId && (
-          <Field label="Status" className="col-span-2" hint="Paused or graduated: their scheduled lessons are cancelled, a weekly series that was only theirs ends, and they leave the lesson pickers. They stay on the list. Archive to hide them too.">
-            <Select name="status" defaultValue={initial.status ?? "ACTIVE"}>
-              <option value="ACTIVE">Active</option>
-              <option value="PAUSED">Paused (taking a break)</option>
-              <option value="GRADUATED">Graduated (finished)</option>
-            </Select>
-          </Field>
-        )}
       </Section>
 
       <Section title="Lessons" hint="Filled in for you each time you add a lesson.">

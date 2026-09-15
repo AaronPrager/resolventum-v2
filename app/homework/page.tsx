@@ -4,12 +4,9 @@ import { requireSession } from "@/src/auth/current";
 import { formatDate } from "@/src/lib/format";
 import { localDateOnly } from "@/src/lib/tz";
 import { listAssignments, type EffectiveStatus } from "@/src/services/homework";
-import { listLibrary } from "@/src/services/files";
-import { Plus } from "lucide-react";
 import { Badge, Button, Card, Empty, LinkButton, PageHeader, Table, TableWrap, Td, Th } from "@/src/components/ui";
 import { ArchiveOlder, ArchiveSelected } from "./ArchiveForms";
 import { toggleArchiveAction } from "./actions";
-import { NewAssignmentForm } from "./NewAssignmentForm";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +18,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
   const today = localDateOnly(new Date(), s.timezone);
   const archived = q.status === "ARCHIVED";
   const filter = (["OPEN", "PENDING", "ASSIGNED", "SOLVED", "REVIEWED", "OVERDUE"] as const).includes(q.status as never) ? (q.status as EffectiveStatus | "OPEN") : "OPEN";
-  const [rows, students, library] = await Promise.all([
-    listAssignments(prisma, s.organizationId, { today, status: archived ? undefined : filter, studentId: q.student, archived }),
-    prisma.student.findMany({ where: { organizationId: s.organizationId, deletedAt: null, archivedAt: null }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
-    listLibrary(prisma, s.organizationId),
-  ]);
+  const rows = await listAssignments(prisma, s.organizationId, { today, status: archived ? undefined : filter, studentId: q.student, archived });
   const tabs: [string, string][] = [["OPEN", "Open"], ["SOLVED", "To review"], ["OVERDUE", "Overdue"], ["ASSIGNED", "Assigned"], ["PENDING", "Not sent"], ["REVIEWED", "Reviewed"], ["ARCHIVED", "Archived"]];
   const current = archived ? "ARCHIVED" : filter;
   const canEdit = s.role !== "ACCOUNTANT";
@@ -58,18 +51,7 @@ export default async function HomeworkPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Homework" subtitle={`${rows.length} ${archived ? "archived" : "shown"}`} actions={<LinkButton href="/library" variant="secondary">Library</LinkButton>} />
-      {canEdit && (
-        <details className="group rounded-xl border border-line bg-surface shadow-xs [&[open]>summary]:border-b [&[open]>summary]:border-line" open={!!q.student}>
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[15px] font-semibold sm:px-5 [&::-webkit-details-marker]:hidden">
-            <Plus className="size-4 text-brand transition-transform group-open:rotate-45" aria-hidden />
-            New assignment
-          </summary>
-          <div className="p-4 sm:p-5">
-            <NewAssignmentForm students={students.map((st) => ({ id: st.id, name: `${st.lastName}, ${st.firstName}` }))} library={library.map((l) => ({ id: l.fileId, name: l.name, folder: l.folder }))} defaultStudentId={q.student} />
-          </div>
-        </details>
-      )}
+      <PageHeader title="Homework" subtitle={`${rows.length} ${archived ? "archived" : "shown"}`} actions={<><LinkButton href="/library" variant="secondary">Library</LinkButton>{canEdit && <LinkButton href={`/homework/new${q.student ? `?student=${q.student}&returnTo=${encodeURIComponent(`/homework?student=${q.student}`)}` : ""}`} variant="primary">New assignment</LinkButton>}</>} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-1 text-sm" aria-label="Filter">
           {tabs.map(([v, label]) => (

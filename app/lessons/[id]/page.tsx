@@ -4,14 +4,12 @@ import { prisma } from "@/src/db";
 import { studentChoices } from "@/src/services/students";
 import { listLessonCategories } from "@/src/services/lessonCategories";
 import { requireSession } from "@/src/auth/current";
-import { emailConfigured } from "@/src/email/send";
 import { formatCents, formatWhen, localDateStr, localTimeStr } from "@/src/lib/format";
 import { cancellationOutcome } from "@/src/services/lessons";
 import { LessonForm } from "../LessonForm";
-import { SessionNoteForm, ShareNoteForm } from "../SessionNoteForm";
 import { MakeupForm } from "./MakeupForm";
 import { cancelLessonAction, markNoShowAction, restoreLessonAction, updateLessonAction } from "../actions";
-import { Badge, Button, Card, Field, Input, PageHeader, Radio } from "@/src/components/ui";
+import { Badge, Button, Card, Field, Input, LinkButton, PageHeader, Radio } from "@/src/components/ui";
 import { ConfirmForm } from "@/src/components/ConfirmForm";
 
 export const dynamic = "force-dynamic";
@@ -46,11 +44,7 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
   const outcome = cancellationOutcome(lesson.organization, lesson.startsAt);
   const liveCharge = lesson.students.some((s) => s.charge && !s.charge.voidedAt && s.charge.amountCents > 0);
   const creditable = cancelled && lesson.students.some((s) => s.charge && !s.charge.voidedAt && s.charge.amountCents > 0 && !lesson.makeupCredits.some((c) => c.studentId === s.studentId));
-  const mailOn = emailConfigured();
-  const contactFor = (s: (typeof lesson.students)[number]) => {
-    const g = s.student.account.guardians.filter((x) => x.email);
-    return (g.find((x) => x.isPrimary) ?? g.find((x) => x.isBilling) ?? g[0])?.email ?? s.student.email ?? "";
-  };
+  const noteBack = encodeURIComponent(`/lessons/${lesson.id}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`);
 
   return (
     <div className="space-y-6">
@@ -61,28 +55,28 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
       />
 
       {seat && lesson.status !== "CANCELLED" && (
-        <Card title="Session notes" actions={<span className="text-xs text-muted">What was covered, one win, one struggle, and the next goal. Goes to the family.</span>}>
-          <div id="notes" className="space-y-6">
+        <Card title="Session notes" actions={<span className="text-xs text-muted">One note per student. Written and sent from the note page.</span>}>
+          <ul id="notes" className="divide-y divide-line text-sm">
             {lesson.students.map((s) => {
               const n = lesson.sessionNotes.find((x) => x.studentId === s.studentId) ?? null;
               return (
-                <div key={s.id} className="space-y-4 border-t border-line pt-4 first:border-t-0 first:pt-0">
-                  {group && <h3 className="text-sm font-semibold">{s.student.firstName} {s.student.lastName}</h3>}
-                  {canWrite ? (
-                    <SessionNoteForm lessonId={lesson.id} studentId={s.studentId} studentFirst={s.student.firstName} initial={n ? { covered: n.covered, homework: n.homework ?? "", engagement: n.engagement ? String(n.engagement) : "", win: n.win ?? "", struggle: n.struggle ?? "", nextGoal: n.nextGoal ?? "" } : null} />
-                  ) : n ? (
-                    <p className="text-sm">{n.covered}</p>
-                  ) : (
-                    <p className="text-sm text-muted">No note yet.</p>
-                  )}
-                  {n && canWrite && (
-                    <ShareNoteForm lessonId={lesson.id} noteId={n.id} defaultTo={contactFor(s)} disabled={!mailOn} sharedTo={n.sharedTo} sharedAt={n.sharedAt ? `${localDateStr(n.sharedAt, tz)} ${localTimeStr(n.sharedAt, tz)}` : null} />
-                  )}
-                </div>
+                <li key={s.id} className="flex flex-wrap items-start gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    {group && <p className="font-medium">{s.student.firstName} {s.student.lastName}</p>}
+                    {n ? (
+                      <>
+                        <p>{n.covered}</p>
+                        <p className="text-xs text-muted">{[n.engagement && `engagement ${n.engagement}/5`, n.nextGoal && `Next: ${n.nextGoal}`, n.sharedAt ? `sent ${localDateStr(n.sharedAt, tz)}` : "not sent"].filter(Boolean).join(" · ")}</p>
+                      </>
+                    ) : <p className="text-muted">No note yet.</p>}
+                  </div>
+                  {canWrite && (n
+                    ? <LinkButton href={`/notes/${n.id}?returnTo=${noteBack}`} variant="secondary">Edit the note</LinkButton>
+                    : <LinkButton href={`/notes/new?lesson=${lesson.id}&student=${s.studentId}&returnTo=${noteBack}`} variant="primary">Write the note</LinkButton>)}
+                </li>
               );
             })}
-            {!mailOn && <p className="text-xs text-warn">Email is off on this server, so notes can be written but not sent.</p>}
-          </div>
+          </ul>
         </Card>
       )}
 

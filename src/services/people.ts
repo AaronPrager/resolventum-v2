@@ -32,11 +32,11 @@ export interface StudentInput {
   difficulties?: string | null;
   notes?: string | null;
   /** Left out = unchanged (or ACTIVE for a new student). */
-  status?: "ACTIVE" | "PAUSED" | "GRADUATED";
+  status?: "ACTIVE" | "PAUSED";
 }
 
-export const STUDENT_STATUSES = ["ACTIVE", "PAUSED", "GRADUATED"] as const;
-export const STUDENT_STATUS_LABEL: Record<(typeof STUDENT_STATUSES)[number], string> = { ACTIVE: "active", PAUSED: "paused", GRADUATED: "graduated" };
+export const STUDENT_STATUSES = ["ACTIVE", "PAUSED"] as const;
+export const STUDENT_STATUS_LABEL: Record<(typeof STUDENT_STATUSES)[number], string> = { ACTIVE: "active", PAUSED: "paused" };
 
 export interface GuardianInput {
   name: string;

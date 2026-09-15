@@ -85,10 +85,10 @@ export async function exportCsv(db: PrismaClient, organizationId: string, kind: 
       ) };
     }
     case "notes": {
-      const rows = await db.sessionNote.findMany({ where: { organizationId }, include: { student: { select: { firstName: true, lastName: true } }, lesson: { select: { startsAt: true, subject: true, tutor: { select: { name: true } } } } }, orderBy: { lesson: { startsAt: "asc" } } });
+      const rows = await db.sessionNote.findMany({ where: { organizationId }, include: { student: { select: { firstName: true, lastName: true } }, lesson: { select: { startsAt: true, subject: true, tutor: { select: { name: true } } } } }, orderBy: [{ notedOn: "asc" }, { createdAt: "asc" }] });
       return { filename: `session-notes-${day}.csv`, csv: toCsv(
-        ["Lesson date", "Student", "Subject", "Tutor", "Covered", "Homework", "Engagement", "Win", "Struggle", "Next goal", "Shared", "Shared to"],
-        rows.map((n) => [localDateStr(n.lesson.startsAt, tz), name(n.student), n.lesson.subject, n.lesson.tutor?.name, n.covered, n.homework, n.engagement, n.win, n.struggle, n.nextGoal, n.sharedAt, n.sharedTo]),
+        ["Date", "Student", "Lesson", "Tutor", "Covered", "Homework", "Engagement", "Win", "Struggle", "Next goal", "Shared", "Shared to"],
+        rows.map((n) => [n.notedOn, name(n.student), n.lesson ? `${n.lesson.subject} ${localTimeStr(n.lesson.startsAt, tz)}` : "general", n.lesson?.tutor?.name, n.covered, n.homework, n.engagement, n.win, n.struggle, n.nextGoal, n.sharedAt, n.sharedTo]),
       ) };
     }
   }

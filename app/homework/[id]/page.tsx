@@ -18,9 +18,11 @@ export const dynamic = "force-dynamic";
 
 function kb(n: number) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
 
-export default async function AssignmentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AssignmentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ returnTo?: string }> }) {
   const s = await requireSession();
   const { id } = await params;
+  const { returnTo } = await searchParams;
+  const back = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/homework";
   const d = await assignmentDetail(prisma, s.organizationId, id);
   if (!d) notFound();
   const a = d.assignment;
@@ -34,7 +36,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
     <div className="space-y-6">
       <PageHeader
         title={a.title}
-        back={{ href: "/homework", label: "Homework" }}
+        back={{ href: back, label: back === "/homework" ? "Homework" : "Back" }}
         subtitle={<span className="inline-flex flex-wrap items-center gap-2"><Link href={`/students/${a.student.id}`} className="text-brand hover:underline">{a.student.firstName} {a.student.lastName}</Link><Badge tone={status === "REVIEWED" ? "credit" : status === "OVERDUE" ? "owed" : status === "SOLVED" ? "warn" : "brand"}>{status === "SOLVED" ? "to review" : status.toLowerCase()}</Badge>{a.archivedAt && <Badge>archived</Badge>}{a.dueOn && <span>due {formatDate(a.dueOn)}</span>}{a.lesson && <span>· from the lesson on {formatDay(a.lesson.startsAt, s.timezone)}</span>}</span>}
         actions={
           <>
