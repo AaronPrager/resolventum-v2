@@ -56,7 +56,7 @@ export default async function NotesPage() {
               <li key={n.id} className="py-2.5">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <Link href={`/notes/${n.id}?returnTo=%2Fnotes`} className="w-44 shrink-0 tabular-nums text-muted hover:text-brand hover:underline">{n.lesson ? formatWhen(n.lesson.startsAt, s.timezone) : formatDate(n.notedOn)}</Link>
-                  <Link href={`/students?s=${n.student.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{n.student.firstName} {n.student.lastName}</Link>
+                  <Link href={`/students/${n.student.id}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{n.student.firstName} {n.student.lastName}</Link>
                   <span className="text-muted">{n.lesson ? `${n.lesson.subject}${!scope && n.lesson.tutor ? ` · ${n.lesson.tutor.name}` : ""}` : "general note"}</span>
                   {n.engagement && <Badge tone={n.engagement >= 4 ? "credit" : n.engagement <= 2 ? "owed" : "neutral"}>engagement {n.engagement}/5</Badge>}
                   <span className="text-xs text-muted">{n.sharedAt ? `sent ${formatDate(n.sharedAt)}` : "not sent"}</span>

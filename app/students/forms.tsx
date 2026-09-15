@@ -16,6 +16,8 @@ export interface StudentValues {
   defaultPrice: string;
   difficulties: string;
   notes: string;
+  /** Editing only: active, paused, or archived. */
+  state?: "ACTIVE" | "PAUSED" | "ARCHIVED";
   /** Edit only. */
 }
 
@@ -51,6 +53,15 @@ export function StudentForm({ studentId, initial, accounts }: { studentId?: stri
         <Field label="Date of birth"><Input type="date" name="dateOfBirth" defaultValue={initial.dateOfBirth} /></Field>
         <Field label="Student email" className="col-span-1 sm:col-span-2" hint="For homework links"><Input type="email" name="email" defaultValue={initial.email} /></Field>
         <Field label="Student phone" className="col-span-1 sm:col-span-2"><Input name="phone" defaultValue={initial.phone} /></Field>
+        {studentId && (
+          <Field label="Status" className="col-span-2" hint="Paused or archived: scheduled lessons are cancelled, a weekly series that was only theirs ends, and they leave the lesson pickers. Paused stays on the list; archived moves to the Archived tab. History and the balance stay either way.">
+            <Select name="state" defaultValue={initial.state ?? "ACTIVE"}>
+              <option value="ACTIVE">Active</option>
+              <option value="PAUSED">Paused (taking a break)</option>
+              <option value="ARCHIVED">Archived (finished or gone)</option>
+            </Select>
+          </Field>
+        )}
       </Section>
 
       <Section title="Lessons" hint="Filled in for you each time you add a lesson.">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpenCheck, CalendarPlus, ExternalLink, NotebookPen, Pencil, Plus } from "lucide-react";
+import { BookOpenCheck, CalendarPlus, ChevronDown, NotebookPen, Pencil, Plus, Sparkles } from "lucide-react";
 import { prisma } from "@/src/db";
 import type { SessionUser } from "@/src/auth/session";
 import { tutorScope } from "@/src/auth/current";
@@ -10,16 +10,18 @@ import { sessionNotesForStudent } from "@/src/services/sessionNotes";
 import { accountBalances } from "@/src/services/balances";
 import { Avatar, Badge, Balance, Card, Empty, LinkButton } from "@/src/components/ui";
 import type React from "react";
-import { StatusSwitch } from "./StatusSwitch";
+import { LessonTable } from "./LessonTable";
 import { studentState } from "@/src/services/students";
 
 /**
- * The right-hand side of the Students page: everything a tutor needs about
- * one student without leaving the list. Lessons coming up, the last ones and
- * whether they have a note, the latest notes, open homework, contacts, and
- * the balance for those who may see money. The full page is one click away.
+ * The one page for a student, under the picker on the Students page. The
+ * short view first: lessons coming up and the last few, the latest notes,
+ * open homework, contacts, and the balance for those who may see money.
+ * Every lesson, every note, and the old progress notes sit in folds below
+ * that, so nothing needs a second page. `all` opens the lesson fold with
+ * every row.
  */
-export async function StudentPanel({ id, session }: { id: string; session: SessionUser }) {
+export async function StudentPanel({ id, session, all = false }: { id: string; session: SessionUser; all?: boolean }) {
   const detail = await studentDetail(prisma, id);
   if (!detail || detail.student.organizationId !== session.organizationId) return <Empty>Pick a student on the left.</Empty>;
   const scope = tutorScope(session);
@@ -29,7 +31,7 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
   const money = session.role !== "TUTOR";
   const now = new Date();
   const [notes, notedRows, balances] = await Promise.all([
-    sessionNotesForStudent(prisma, student.id, 4),
+    sessionNotesForStudent(prisma, student.id, 200),
     prisma.sessionNote.findMany({ where: { studentId: student.id }, select: { lessonId: true } }),
     money ? accountBalances(prisma, student.organization.id, localDateOnly(now, session.organizationTimezone)) : Promise.resolve([]),
   ]);
@@ -39,14 +41,18 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
   const mine = (l: (typeof student.lessons)[number]) => !scope || l.lesson.tutorId === scope;
   const upcoming = student.lessons.filter((l) => l.lesson.startsAt > now && l.lesson.status === "SCHEDULED" && mine(l)).reverse().slice(0, 4);
   const recent = student.lessons.filter((l) => l.lesson.startsAt <= now && mine(l)).slice(0, 5);
+  // The fold below the short lists: every lesson, capped unless `all`.
+  const allUpcoming = student.lessons.filter((l) => l.lesson.startsAt > now).reverse();
+  const allPast = student.lessons.filter((l) => l.lesson.startsAt <= now);
   // Lessons still owed a note: taught in the last 30 days, no note yet. Newest first, so the button opens the freshest one.
   const since = new Date(now.getTime() - 30 * 86400000);
   const needNote = student.lessons.filter((l) => mine(l) && l.lesson.status === "COMPLETED" && l.lesson.startsAt <= now && l.lesson.startsAt >= since && !noted.has(l.lesson.id));
   const openHomework = student.assignments.filter((a) => a.status !== "REVIEWED");
   const canWrite = session.role !== "ACCOUNTANT";
-  const here = `/students?s=${student.id}`;
+  const here = `/students/${student.id}`;
   const back = encodeURIComponent(here);
-  const primary = student.account.guardians.find((g) => g.isPrimary) ?? student.account.guardians[0];
+  const hereAll = `${here}?all=1`;
+  const hasNotes = !!(student.difficulties || student.notes);
 
   return (
     <div className="space-y-3" data-testid="student-panel">
@@ -55,11 +61,10 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
         <div className="min-w-0 flex-1">
           <h2 className="flex flex-wrap items-center gap-2 text-xl font-semibold tracking-[-0.02em]">
             {student.firstName} {student.lastName}
-            {!canWrite && studentState(student) !== "ACTIVE" && <Badge tone={student.archivedAt ? "neutral" : "warn"}>{studentState(student).toLowerCase()}</Badge>}
+            {studentState(student) !== "ACTIVE" && <Badge tone={student.archivedAt ? "neutral" : "warn"}>{studentState(student).toLowerCase()}</Badge>}
           </h2>
           <p className="text-sm text-muted">{[student.grade && `Grade ${student.grade}`, student.schoolName, student.defaultSubject].filter(Boolean).join(" · ") || "No grade or subject yet"}</p>
         </div>
-        <Link href={`/students/${student.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted hover:bg-surface-3 hover:text-fg"><ExternalLink className="size-4" aria-hidden />Full page</Link>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -67,7 +72,7 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
         {needNote[0] && <LinkButton href={`/notes/new?lesson=${needNote[0].lesson.id}&student=${student.id}&returnTo=${back}`} variant="secondary" title={`${needNote.length} lesson${needNote.length === 1 ? "" : "s"} from the last 30 days without a session note`}><NotebookPen aria-hidden />Write the note{needNote.length > 1 ? ` (${needNote.length} owed)` : ""}</LinkButton>}
         <LinkButton href={`/homework?student=${student.id}`} variant="secondary"><BookOpenCheck aria-hidden />Homework</LinkButton>
         {session.role !== "ACCOUNTANT" && <LinkButton href={`/students/${student.id}/edit`} variant="secondary"><Pencil aria-hidden />Edit</LinkButton>}
-        {canWrite && <StatusSwitch studentId={student.id} state={studentState(student)} first={student.firstName} scheduled={student.lessons.filter((l) => l.lesson.startsAt > now && l.lesson.status === "SCHEDULED").length} returnTo={here} />}
+        {canWrite && <LinkButton href={`/students/${student.id}/update`} variant="secondary" title="Draft an update for the parents with AI"><Sparkles aria-hidden />Parent update</LinkButton>}
       </div>
 
       <div className="space-y-3">
@@ -103,11 +108,17 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
               )}
             </Column>
           </div>
+          <Fold label={`Every lesson · ${allUpcoming.length} upcoming, ${allPast.length} past`} open={all} testId="all-lessons">
+            <div className="space-y-4">
+              <LessonTable title={`Upcoming (${allUpcoming.length})`} rows={all ? allUpcoming : allUpcoming.slice(0, 8)} hidden={all ? 0 : Math.max(0, allUpcoming.length - 8)} tz={tz} studentId={student.id} testId="upcoming" noted={noted} back={hereAll} more={hereAll} />
+              <LessonTable title={`Past (${allPast.length})`} rows={all ? allPast : allPast.slice(0, 12)} hidden={all ? 0 : Math.max(0, allPast.length - 12)} tz={tz} studentId={student.id} testId="past" noted={noted} back={hereAll} more={hereAll} />
+            </div>
+          </Fold>
         </Card>
 
         <Card className="p-4 sm:p-4">
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-            <Column title="Session notes" action={notes.length > 0 ? <Link href={`/students/${student.id}#notes`} className="text-xs text-brand hover:underline">All</Link> : undefined}>
+            <Column title={`Session notes${notes.length > 3 ? ` · ${notes.length}` : ""}`}>
               {notes.length === 0 ? <p className="text-sm text-muted">None yet.</p> : (
                 <ul className="space-y-2 text-sm">
                   {notes.slice(0, 3).map((n) => (
@@ -141,27 +152,61 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
               {canWrite && <Link href={`/homework/new?student=${student.id}&returnTo=${back}`} className="mt-2 inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted hover:bg-surface-3 hover:text-fg"><Plus className="size-3.5" aria-hidden />Add homework</Link>}
             </Column>
           </div>
+          {notes.length > 3 && (
+            <Fold label={`Every note · ${notes.length}`} testId="all-notes">
+              <ul className="divide-y divide-line text-sm" data-testid="session-notes">
+                {notes.map((n) => (
+                  <li key={n.id} className="py-2.5">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <Link href={`/notes/${n.id}?returnTo=${back}`} className="w-40 shrink-0 tabular-nums text-muted hover:text-brand hover:underline">{n.lesson ? formatWhen(n.lesson.startsAt, tz) : formatDate(n.notedOn)}</Link>
+                      <span className="font-medium">{n.lesson ? n.lesson.subject || "Lesson" : "General note"}</span>
+                      {n.engagement && <Badge tone={n.engagement >= 4 ? "credit" : n.engagement <= 2 ? "owed" : "neutral"}>engagement {n.engagement}/5</Badge>}
+                      <span className="text-xs text-muted">{n.sharedAt ? `sent ${formatDate(n.sharedAt)}` : "not sent"}</span>
+                    </div>
+                    <p className="mt-1">{n.covered}</p>
+                    {(n.win || n.struggle || n.nextGoal) && <p className="mt-0.5 text-muted">{[n.win && `Win: ${n.win}`, n.struggle && `Struggle: ${n.struggle}`, n.nextGoal && `Next: ${n.nextGoal}`].filter(Boolean).join(" · ")}</p>}
+                  </li>
+                ))}
+              </ul>
+            </Fold>
+          )}
+          {student.progressNotes.length > 0 && (
+            <Fold label={`Older progress notes · ${student.progressNotes.length}`} hint="From before session notes. Read only." testId="progress-notes">
+              <ul className="divide-y divide-line text-sm">
+                {student.progressNotes.map((n) => (
+                  <li key={n.id} className="flex gap-3 py-2.5">
+                    <span className="w-24 shrink-0 tabular-nums text-muted">{formatDate(n.notedOn)}</span>
+                    <span className="min-w-0 flex-1 whitespace-pre-line">{n.note}</span>
+                  </li>
+                ))}
+              </ul>
+            </Fold>
+          )}
         </Card>
 
         <Card className="p-4 sm:p-4">
-          <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+          <div className={`grid gap-x-8 gap-y-4 sm:grid-cols-2 ${money && hasNotes ? "lg:grid-cols-3" : ""}`}>
             <Column title="Contacts">
               {student.account.guardians.length === 0 && !student.email ? <p className="text-sm text-muted">None on file.</p> : (
-                <div className="space-y-0.5 text-sm">
-                  {primary && <p>{primary.name}{primary.relationship && <span className="text-muted"> · {primary.relationship}</span>}<span className="block text-xs text-muted">{[primary.email, primary.phone].filter(Boolean).join(" · ")}</span></p>}
+                <div className="space-y-1 text-sm">
+                  {student.account.guardians.map((g) => (
+                    <p key={g.id}>{g.name}<span className="text-muted">{[g.relationship, g.isPrimary && "primary", g.isEmergency && "emergency"].filter(Boolean).map((x) => ` · ${x}`).join("")}</span><span className="block text-xs text-muted">{[g.email, g.phone].filter(Boolean).join(" · ")}</span></p>
+                  ))}
                   {student.email && <p className="text-xs text-muted">Student: {[student.email, student.phone].filter(Boolean).join(" · ")}</p>}
-                  {student.account.guardians.length > 1 && <p className="text-xs text-muted">{student.account.guardians.length - 1} more on the <Link href={`/accounts/${student.accountId}`} className="text-brand hover:underline">account</Link>.</p>}
                 </div>
               )}
+              <p className="mt-2 text-xs"><Link href={`/accounts/${student.accountId}`} className="text-brand hover:underline">Change them on the account</Link></p>
             </Column>
-            {money ? (
+            {money && (
               <Column title="Account">
                 <p className="text-sm"><Link href={`/accounts/${student.accountId}`} className="font-medium text-fg underline-offset-2 hover:text-brand hover:underline">{student.account.name}</Link>{student.account.students.length > 1 && <span className="text-muted"> · {student.account.students.map((s) => s.firstName).join(", ")}</span>}</p>
                 <p className="mt-0.5 text-sm"><Balance cents={balance} className="font-semibold" />{student.defaultPriceCents != null && <span className="text-xs text-muted"> · usual price {formatCents(student.defaultPriceCents)}</span>}</p>
+                <p className="mt-2 text-xs"><a href={`/api/students/${student.id}/agreement`} className="text-brand hover:underline">Tutoring agreement (PDF)</a></p>
               </Column>
-            ) : (
+            )}
+            {(hasNotes || !money) && (
               <Column title="Notes">
-                {student.difficulties || student.notes ? (
+                {hasNotes ? (
                   <div className="space-y-0.5 text-sm">
                     {student.difficulties && <p><span className="text-muted">Finds hard: </span>{student.difficulties}</p>}
                     {student.notes && <p className="whitespace-pre-line">{student.notes}</p>}
@@ -173,6 +218,20 @@ export async function StudentPanel({ id, session }: { id: string; session: Sessi
         </Card>
       </div>
     </div>
+  );
+}
+
+/** A closed section at the foot of a card: a one-line summary that opens to the whole thing. */
+function Fold({ label, hint, open, testId, children }: { label: string; hint?: string; open?: boolean; testId?: string; children: React.ReactNode }) {
+  return (
+    <details className="group mt-4 border-t border-line pt-2" open={open} data-testid={testId}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-sm text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+        <span className="font-medium">{label}</span>
+        {hint && <span className="text-xs">{hint}</span>}
+      </summary>
+      <div className="pt-3">{children}</div>
+    </details>
   );
 }
 

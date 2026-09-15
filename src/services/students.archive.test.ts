@@ -100,3 +100,22 @@ describe("one switch for active, paused, archived", () => {
     await expect(setStudentState(prisma, "not-an-org", student.id, "ACTIVE", now)).rejects.toThrow(/not found/);
   });
 });
+
+describe("deleting a student", () => {
+  it("deletes one with nothing on record and refuses one with lessons", async () => {
+    const org = await prisma.organization.findFirstOrThrow();
+    const estella = await prisma.student.findFirstOrThrow({ where: { organizationId: org.id, firstName: "Estella" } });
+    const { deleteStudent } = await import("./students");
+    await expect(deleteStudent(prisma, org.id, estella.id)).rejects.toThrow(/Archive instead/);
+    const fresh = await prisma.student.create({ data: { organizationId: org.id, accountId: estella.accountId, firstName: "Delete", lastName: "Me" } });
+    try {
+      await deleteStudent(prisma, org.id, fresh.id);
+      const gone = await prisma.student.findUniqueOrThrow({ where: { id: fresh.id } });
+      expect(gone.deletedAt).not.toBeNull();
+      expect((await listStudents(prisma, org.id, new Date(), { includeArchived: true })).some((s) => s.id === fresh.id)).toBe(false);
+      await expect(deleteStudent(prisma, org.id, fresh.id)).rejects.toThrow(/not found/);
+    } finally {
+      await prisma.student.delete({ where: { id: fresh.id } });
+    }
+  });
+});

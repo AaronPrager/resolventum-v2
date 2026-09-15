@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/src/db";
 import { RoleError, requireWriter } from "@/src/auth/current";
 import { localDateOnly } from "@/src/lib/tz";
-import { type StudentState, setStudentState } from "@/src/services/students";
+import { StudentError, type StudentState, deleteStudent, setStudentState } from "@/src/services/students";
 import { auditAs } from "@/src/services/audit";
 import { PeopleError, type StudentInput, createStudent, moveStudent, updateStudent } from "@/src/services/people";
 
@@ -33,7 +33,19 @@ function readStudent(fd: FormData): StudentInput {
   };
 }
 function known(e: unknown): string | null {
-  return e instanceof PeopleError || e instanceof RoleError ? e.message : null;
+  return e instanceof PeopleError || e instanceof StudentError || e instanceof RoleError ? e.message : null;
+}
+const STATES: StudentState[] = ["ACTIVE", "PAUSED", "ARCHIVED"];
+
+/** Moves a student between active, paused, and archived, and writes the audit line. */
+async function moveState(session: Awaited<ReturnType<typeof requireWriter>>, id: string, state: StudentState) {
+  const r = await setStudentState(prisma, session.organizationId, id, state);
+  if (r.changed) {
+    const st = await prisma.student.findUniqueOrThrow({ where: { id }, select: { firstName: true, lastName: true } });
+    await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${r.from.toLowerCase()} to ${state.toLowerCase()}${r.cancelledLessons ? `, ${r.cancelledLessons} lessons cancelled` : ""}${r.endedSeries ? `, ${r.endedSeries} series ended` : ""}` });
+  }
+  revalidatePath("/calendar");
+  revalidatePath("/");
 }
 
 export async function createStudentAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -61,6 +73,8 @@ export async function updateStudentAction(_p: ActionState, fd: FormData): Promis
   try {
     const session = await requireWriter();
     await updateStudent(prisma, session.organizationId, id, readStudent(fd));
+    const state = str(fd, "state") as StudentState;
+    if (STATES.includes(state)) await moveState(session, id, state);
   } catch (e) {
     const m = known(e);
     if (m) return { error: m };
@@ -91,25 +105,33 @@ export async function moveStudentAction(_p: ActionState, fd: FormData): Promise<
 
 
 
-const STATES: StudentState[] = ["ACTIVE", "PAUSED", "ARCHIVED"];
-
-/** The one action that moves a student between active, paused, and archived. */
+/** Archive or bring back from a list row, or any other one-click move between states. */
 export async function setStudentStateAction(fd: FormData) {
   const session = await requireWriter();
   const id = str(fd, "studentId");
   const state = str(fd, "state") as StudentState;
   if (!STATES.includes(state)) throw new PeopleError("Unknown status");
-  const r = await setStudentState(prisma, session.organizationId, id, state);
-  if (r.changed) {
-    const st = await prisma.student.findUniqueOrThrow({ where: { id }, select: { firstName: true, lastName: true } });
-    await auditAs(prisma, session, { action: "student.status", subjectType: "student", subjectId: id, summary: `${st.firstName} ${st.lastName}: ${r.from.toLowerCase()} to ${state.toLowerCase()}${r.cancelledLessons ? `, ${r.cancelledLessons} lessons cancelled` : ""}${r.endedSeries ? `, ${r.endedSeries} series ended` : ""}` });
-  }
+  await moveState(session, id, state);
   revalidatePath("/students");
   revalidatePath(`/students/${id}`);
-  revalidatePath("/calendar");
-  revalidatePath("/");
   const returnTo = str(fd, "returnTo");
-  // From the list, land on the tab the student is now under, still selected.
-  if (!returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.startsWith("/students?")) redirect(`/students?${state === "ARCHIVED" ? "status=ARCHIVED&" : ""}s=${id}`);
-  redirect(returnTo);
+  redirect(returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : `/students/${id}`);
+}
+
+/** Delete a student added by mistake. One with lessons or charges is refused; archive those. */
+export async function deleteStudentAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd, "studentId");
+  try {
+    const session = await requireWriter();
+    const st = await prisma.student.findFirst({ where: { id, organizationId: session.organizationId }, select: { firstName: true, lastName: true } });
+    await deleteStudent(prisma, session.organizationId, id);
+    await auditAs(prisma, session, { action: "student.delete", subjectType: "student", subjectId: id, summary: st ? `${st.firstName} ${st.lastName} deleted` : "deleted" });
+  } catch (e) {
+    const m = known(e);
+    if (m) return { error: m };
+    throw e;
+  }
+  revalidatePath("/students");
+  revalidatePath("/accounts");
+  redirect(str(fd, "returnTo").startsWith("/students") ? str(fd, "returnTo") : "/students");
 }

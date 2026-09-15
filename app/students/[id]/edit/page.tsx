@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/src/db";
+import { studentState } from "@/src/services/students";
 import { requireWriter } from "@/src/auth/current";
 import { Card, PageHeader } from "@/src/components/ui";
 import { MoveStudentForm, StudentForm } from "../../forms";
@@ -29,7 +30,7 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
           initial={{
             firstName: s.firstName, lastName: s.lastName, email: s.email ?? "", phone: s.phone ?? "", grade: s.grade ?? "", schoolName: s.schoolName ?? "",
             dateOfBirth: s.dateOfBirth ? s.dateOfBirth.toISOString().slice(0, 10) : "", defaultSubject: s.defaultSubject ?? "",
-            defaultPrice: s.defaultPriceCents != null ? (s.defaultPriceCents / 100).toFixed(2) : "", difficulties: s.difficulties ?? "", notes: s.notes ?? "",
+            defaultPrice: s.defaultPriceCents != null ? (s.defaultPriceCents / 100).toFixed(2) : "", difficulties: s.difficulties ?? "", notes: s.notes ?? "", state: studentState(s),
           }}
         />
       </Card>

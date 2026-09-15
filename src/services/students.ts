@@ -159,6 +159,18 @@ export async function setStudentState(db: PrismaClient, organizationId: string, 
   return { changed: true, from, cancelledLessons: r.cancelledLessons, endedSeries: r.endedSeries };
 }
 
+/**
+ * Delete a student who was added by mistake: nothing on record, so nothing
+ * to keep. A student with lessons or charges is archived instead, since the
+ * statement needs them.
+ */
+export async function deleteStudent(db: PrismaClient, organizationId: string, studentId: string): Promise<void> {
+  const s = await db.student.findFirst({ where: { id: studentId, organizationId, deletedAt: null }, include: { _count: { select: { lessons: true, charges: true } } } });
+  if (!s) throw new StudentError("Student not found");
+  if (s._count.lessons > 0 || s._count.charges > 0) throw new StudentError(`${s.firstName} has lessons or charges. Archive instead.`);
+  await db.student.update({ where: { id: studentId }, data: { deletedAt: new Date(), archivedAt: s.archivedAt ?? new Date() } });
+}
+
 export interface ArchiveCandidate { id: string; name: string; lastLessonAt: Date | null; balanceCents: number }
 
 /**

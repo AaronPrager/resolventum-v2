@@ -27,8 +27,8 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Estella Urman" })).toBeVisible();
   await expect(page.getByText("credit $130.00")).toBeVisible();
 
-  // Add a future lesson at 130.
-  await page.getByText("New lesson for Estella").click();
+  // Add a future lesson at 130. The New lesson button opens the lesson page with her filled in.
+  await page.getByRole("link", { name: "New lesson" }).click();
   const form = page.getByTestId("lesson-form");
   await form.getByLabel("Date").fill("2027-03-20");
   await form.getByLabel("Time").fill("16:00");
@@ -37,6 +37,8 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await form.getByLabel("Subject").fill(SUBJECT);
   await form.getByRole("button", { name: "Add lesson" }).click();
 
+  // Back on her page; every lesson is in the fold, opened with all=1.
+  await page.goto(`/students/${student.id}?all=1`);
   const upcoming = page.getByTestId("upcoming");
   const row = upcoming.getByRole("row", { name: new RegExp(SUBJECT) });
   await expect(row).toBeVisible();
@@ -52,7 +54,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
   await expect(page.getByTestId("closing-balance")).toContainText("$0.00");
 
   // Edit the price to 140.
-  await page.goto(`/students/${student.id}`);
+  await page.goto(`/students/${student.id}?all=1`);
   await row.getByRole("link", { name: "Edit" }).click();
   await expect(page.getByRole("heading", { name: "Edit lesson" })).toBeVisible();
   await page.getByLabel("Price").fill("140");
@@ -77,7 +79,7 @@ test("add, edit, and cancel a lesson", async ({ page }) => {
 test("the form rejects a bad price", async ({ page }) => {
   const student = await prisma.student.findFirstOrThrow({ where: { firstName: "Estella", lastName: "Urman" } });
   await page.goto(`/students/${student.id}`);
-  await page.getByText("New lesson for Estella").click();
+  await page.getByRole("link", { name: "New lesson" }).click();
   const form = page.getByTestId("lesson-form");
   await form.getByLabel("Subject").fill(SUBJECT);
   await form.getByLabel("Price").fill("abc");

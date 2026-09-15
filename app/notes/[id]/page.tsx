@@ -18,7 +18,7 @@ export default async function NotePage({ params, searchParams }: { params: Promi
   const q = await searchParams;
   const n = await noteFor(s, id);
   if (!n) notFound();
-  const returnTo = q.returnTo && q.returnTo.startsWith("/") && !q.returnTo.startsWith("//") ? q.returnTo : `/students?s=${n.student.id}`;
+  const returnTo = q.returnTo && q.returnTo.startsWith("/") && !q.returnTo.startsWith("//") ? q.returnTo : `/students/${n.student.id}`;
   const canWrite = s.role !== "ACCOUNTANT";
   const mailOn = emailConfigured();
   const name = `${n.student.firstName} ${n.student.lastName}`;
